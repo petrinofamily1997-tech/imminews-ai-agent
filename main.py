@@ -51,7 +51,7 @@ CONTENT_TYPES = [
 
 
 # =========================
-# GET HISTORY
+# HISTORY
 # =========================
 
 def get_history():
@@ -88,7 +88,7 @@ def get_news():
         print("ℹ️ No new news found.")
         return None
 
-    # Remove duplicates
+    # Убираем дубликаты
     unique_entries = {}
 
     for entry in all_entries:
@@ -96,7 +96,6 @@ def get_news():
 
     all_entries = list(unique_entries.values())
 
-    # Pick a random fresh news item
     news = random.choice(all_entries)
 
     print(f"📰 Found: {news.title}")
@@ -105,34 +104,73 @@ def get_news():
 
 
 # =========================
-# GENERATE EDUCATIONAL TOPIC
+# EDUCATIONAL TOPICS
 # =========================
 
 def generate_educational_topic():
+
     topics = [
-        "how to manage personal money",
-        "how to save money",
-        "how to build an emergency fund",
-        "how to avoid unnecessary debt",
-        "how to increase income",
-        "how to make money online realistically",
-        "skills that can increase income",
-        "how artificial intelligence can help people earn money",
-        "how to start investing responsibly",
-        "what diversification means",
-        "what compound interest means",
-        "how inflation affects ordinary people",
-        "common financial mistakes",
-        "how to create a personal budget",
-        "how to control impulsive spending",
-        "how to evaluate financial risks",
-        "how to develop better money habits",
-        "how to turn a skill into additional income",
-        "how to negotiate a higher salary",
-        "how to create additional sources of income",
+        "как правильно вести личный бюджет",
+        "как начать откладывать деньги",
+        "как создать финансовую подушку",
+        "как избавиться от ненужных расходов",
+        "как правильно пользоваться кредитами",
+        "как избежать долговой ямы",
+        "как увеличить свой доход",
+        "как найти дополнительный источник дохода",
+        "как начать зарабатывать в интернете без мошеннических схем",
+        "какие навыки могут увеличить доход",
+        "как использовать искусственный интеллект для работы",
+        "как использовать ИИ для дополнительного заработка",
+        "как начать разбираться в инвестициях",
+        "что такое диверсификация",
+        "что такое сложный процент",
+        "как инфляция влияет на деньги",
+        "какие финансовые ошибки совершают люди",
+        "как контролировать импульсивные покупки",
+        "как правильно планировать крупные покупки",
+        "как создать несколько источников дохода",
+        "как повысить свою стоимость на рынке труда",
+        "как просить повышение зарплаты",
+        "как превратить свой навык в дополнительный доход",
+        "как экономить деньги без постоянных ограничений",
+        "как научиться обращаться с деньгами",
     ]
 
     return random.choice(topics)
+
+
+# =========================
+# CLEAN TEXT
+# =========================
+
+def clean_text(text):
+
+    if not text:
+        return ""
+
+    # Убираем Markdown
+    text = text.replace("**", "")
+    text = text.replace("__", "")
+    text = text.replace("```", "")
+    text = text.replace("`", "")
+    text = text.replace("~~", "")
+
+    # Убираем возможные заголовочные символы
+    lines = []
+
+    for line in text.splitlines():
+
+        line = line.strip()
+
+        if line.startswith("#"):
+            line = line.lstrip("#").strip()
+
+        lines.append(line)
+
+    text = "\n".join(lines)
+
+    return text.strip()
 
 
 # =========================
@@ -140,6 +178,7 @@ def generate_educational_topic():
 # =========================
 
 def generate_content(news_entry=None):
+
     print("🤖 AI is analyzing with Groq...")
 
     if not GROQ_API_KEY:
@@ -147,57 +186,76 @@ def generate_content(news_entry=None):
         return None
 
     try:
+
         client = Groq(api_key=GROQ_API_KEY)
 
         content_type = random.choice(CONTENT_TYPES)
 
-        # -------------------------
+        # =========================
         # NEWS
-        # -------------------------
+        # =========================
 
         if content_type == "news" and news_entry:
 
             prompt = f"""
-Ты — профессиональный русскоязычный редактор финансового Telegram-канала.
+Ты — редактор современного русскоязычного финансового канала.
 
-Твоя задача — объяснить финансовую новость обычному человеку простым языком.
-
-Новость:
+Проанализируй эту финансовую новость:
 
 ЗАГОЛОВОК:
 {news_entry.title}
 
-ССЫЛКА:
+ИСТОЧНИК:
 {news_entry.link}
 
-Напиши:
+Создай пост для Telegram и короткую версию для X.
 
-1. TELEGRAM — подробный пост на русском языке.
-2. X_POST — короткий пост на русском языке.
+Telegram:
 
-Для Telegram:
-- 3-6 небольших абзацев.
-- Используй подходящие эмодзи.
-- Объясни, что произошло.
-- Объясни, почему это важно.
-- Объясни возможное влияние на обычных людей.
-- Добавь небольшой практический вывод.
-- Можно добавить лёгкую шутку или иронию.
-- Не выдумывай факты.
-- Не выдавай предположения за факты.
+Напиши 3-6 небольших абзацев.
 
-Для X:
-- Коротко.
-- Интересно.
-- Русский язык.
-- 1-2 подходящих хэштега.
-- Не используй кликбейт без причины.
+Обязательно:
+- русский язык;
+- простое объяснение;
+- объясни, что произошло;
+- объясни, почему это важно;
+- объясни возможное влияние на обычных людей;
+- добавь практический вывод;
+- можно использовать эмодзи;
+- разрешён лёгкий юмор и ирония;
+- не выдумывай факты.
+
+Очень важно:
+
+НЕ используй Markdown.
+
+НЕ используй символы **
+
+НЕ используй символы *
+
+НЕ используй символы __
+
+НЕ используй обратные кавычки.
+
+НЕ используй заголовки с #.
+
+Пиши обычным чистым текстом.
+
+Не добавляй ссылку на источник в Telegram.
+
+X:
+
+Создай короткий пост на русском языке.
+Максимум 280 символов.
+Можно использовать 1-2 хэштега.
+
+Также не используй Markdown.
 
 В конце Telegram добавь:
 
 ⚠️ Материал носит информационный характер и не является индивидуальной финансовой рекомендацией.
 
-Формат ответа должен быть строго:
+Формат:
 
 TELEGRAM:
 текст
@@ -206,9 +264,9 @@ X_POST:
 текст
 """
 
-        # -------------------------
-        # EDUCATION / MONEY / INCOME
-        # -------------------------
+        # =========================
+        # EDUCATIONAL CONTENT
+        # =========================
 
         else:
 
@@ -220,48 +278,78 @@ X_POST:
 Тема:
 {topic}
 
-Создай полезный образовательный материал для обычного человека.
+Создай полезный материал для обычного человека.
 
-Основные направления:
+Направления:
 - личные финансы;
 - управление деньгами;
 - инвестиционная грамотность;
-- способы увеличения дохода;
+- увеличение дохода;
 - дополнительные источники дохода;
 - финансовые привычки;
 - предпринимательство;
 - работа и навыки;
 - использование ИИ для повышения продуктивности и дохода.
 
-ВАЖНЫЕ ПРАВИЛА:
+Стиль:
 
-- Только русский язык.
-- Объясняй простыми словами.
-- Не обещай гарантированный заработок.
-- Не говори, что человек гарантированно заработает деньги.
-- Не рекламируй сомнительные схемы.
-- Не придумывай статистику.
-- Не выдавай инвестиционные предположения за факты.
-- Не советуй конкретно покупать или продавать активы.
-- Лёгкий юмор разрешён.
-- Стиль должен быть современным и живым.
+Пиши как умный друг, который хорошо разбирается в деньгах.
 
-Для Telegram:
-- 4-7 небольших абзацев.
-- Эмодзи.
-- Конкретные советы.
-- В конце небольшой практический вывод.
+Информация должна быть серьёзной и полезной, но текст должен быть живым.
 
-Для X:
-- Короткая полезная мысль.
-- Русский язык.
-- 1-2 хэштега.
+Можно использовать лёгкий юмор и иронию.
 
-В конце Telegram добавь:
+Не обещай гарантированный заработок.
+
+Не рекламируй сомнительные схемы.
+
+Не придумывай статистику.
+
+Не советуй конкретно покупать или продавать финансовые активы.
+
+Telegram:
+
+4-7 небольших абзацев.
+
+Используй подходящие эмодзи.
+
+Дай конкретные и понятные советы.
+
+В конце сделай небольшой практический вывод.
+
+Очень важно:
+
+НЕ используй Markdown.
+
+НЕ используй символы **
+
+НЕ используй символы *
+
+НЕ используй символы __
+
+НЕ используй обратные кавычки.
+
+НЕ используй заголовки с #.
+
+Пиши обычным чистым текстом.
+
+Не добавляй ссылки.
+
+В конце добавь:
 
 ⚠️ Материал носит информационный и образовательный характер и не является индивидуальной финансовой рекомендацией.
 
-Формат ответа строго:
+X:
+
+Короткая полезная мысль на русском языке.
+
+Максимум 280 символов.
+
+Можно использовать 1-2 хэштега.
+
+Без Markdown.
+
+Формат:
 
 TELEGRAM:
 текст
@@ -270,14 +358,19 @@ X_POST:
 текст
 """
 
+        # =========================
+        # GROQ REQUEST
+        # =========================
+
         completion = client.chat.completions.create(
             model="openai/gpt-oss-20b",
             messages=[
                 {
                     "role": "system",
                     "content": (
-                        "Ты пишешь качественный русскоязычный "
-                        "финансово-образовательный контент."
+                        "Ты качественный русскоязычный "
+                        "финансово-образовательный редактор. "
+                        "Никогда не используй Markdown."
                     )
                 },
                 {
@@ -306,18 +399,61 @@ X_POST:
         else:
             x_text = ""
 
+        # Дополнительная очистка
+        telegram_text = clean_text(telegram_text)
+        x_text = clean_text(x_text)
+
         return {
             "telegram": telegram_text,
             "x": x_text
         }
 
     except Exception as e:
+
         print(f"❌ Groq Error: {e}")
+
         return None
 
 
 # =========================
-# POST TO X
+# TELEGRAM
+# =========================
+
+def send_telegram(text):
+
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+
+        print("❌ Telegram credentials are not configured!")
+
+        return
+
+    try:
+
+        url = (
+            f"https://api.telegram.org/"
+            f"bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        )
+
+        response = requests.post(
+            url,
+            data={
+                "chat_id": TELEGRAM_CHAT_ID,
+                "text": text
+            },
+            timeout=30
+        )
+
+        response.raise_for_status()
+
+        print("✅ Sent to Telegram!")
+
+    except Exception as e:
+
+        print(f"❌ Telegram Error: {e}")
+
+
+# =========================
+# X
 # =========================
 
 def post_to_x(tweet_text):
@@ -328,10 +464,13 @@ def post_to_x(tweet_text):
         X_ACCESS_TOKEN,
         X_ACCESS_SECRET
     ]):
+
         print("⚠️ X API credentials are not configured. Skipping X.")
+
         return
 
     try:
+
         client_x = tweepy.Client(
             consumer_key=X_API_KEY,
             consumer_secret=X_API_SECRET,
@@ -339,7 +478,6 @@ def post_to_x(tweet_text):
             access_token_secret=X_ACCESS_SECRET
         )
 
-        # X has a character limit
         if len(tweet_text) > 280:
             tweet_text = tweet_text[:277] + "..."
 
@@ -348,40 +486,8 @@ def post_to_x(tweet_text):
         print("✅ Posted to X!")
 
     except Exception as e:
+
         print(f"❌ X Error: {e}")
-
-
-# =========================
-# SEND TELEGRAM
-# =========================
-
-def send_telegram(text, link):
-
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("❌ Telegram credentials are not configured!")
-        return
-
-    try:
-        url = (
-            f"https://api.telegram.org/"
-            f"bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        )
-
-        response = requests.post(
-            url,
-            data={
-                "chat_id": TELEGRAM_CHAT_ID,
-                "text": f"{text}\n\n🔗 {link}"
-            },
-            timeout=30
-        )
-
-        response.raise_for_status()
-
-        print("✅ Sent to Telegram!")
-
-    except Exception as e:
-        print(f"❌ Telegram Error: {e}")
 
 
 # =========================
@@ -395,39 +501,54 @@ if __name__ == "__main__":
     news = get_news()
 
     # 50/50:
-    # If there is news, sometimes use it.
-    # Otherwise generate educational content.
+    # 50% новости
+    # 50% образовательный контент
 
     if random.random() < 0.5 and news:
+
+        print("📰 Content type: NEWS")
+
         ai_content = generate_content(news)
+
         history_link = news.link
 
     else:
+
+        print("💡 Content type: EDUCATIONAL")
+
         ai_content = generate_content(None)
 
-        if news:
-            history_link = news.link
-        else:
-            history_link = None
+        history_link = None
 
     if ai_content:
 
-        # Telegram
+        # Отправляем только текст.
+        # Ссылка больше НЕ добавляется.
+
         send_telegram(
-            ai_content["telegram"],
-            history_link if history_link else "Financial education"
+            ai_content["telegram"]
         )
 
         # X
         if ai_content["x"]:
-            post_to_x(ai_content["x"])
 
-        # Save news to history
+            post_to_x(
+                ai_content["x"]
+            )
+
+        # Записываем новость в историю
         if history_link:
-            with open("history.txt", "a", encoding="utf-8") as f:
+
+            with open(
+                "history.txt",
+                "a",
+                encoding="utf-8"
+            ) as f:
+
                 f.write(history_link + "\n")
 
         print("✅ Content processed successfully!")
 
     else:
+
         print("❌ Content generation failed.")
