@@ -31,22 +31,7 @@ RSS_FEEDS = [
     "https://news.google.com/rss/search?q=finance+economy+markets&hl=en-US&gl=US&ceid=US:en",
     "https://news.google.com/rss/search?q=personal+finance+money&hl=en-US&gl=US&ceid=US:en",
     "https://news.google.com/rss/search?q=investing+stocks+economy&hl=en-US&gl=US&ceid=US:en",
-]
-
-
-# =========================
-# CONTENT TYPES
-# =========================
-
-CONTENT_TYPES = [
-    "news",
-    "news",
-    "money",
-    "investing",
-    "income",
-    "money",
-    "news",
-    "investing",
+    "https://news.google.com/rss/search?q=business+economy&hl=en-US&gl=US&ceid=US:en",
 ]
 
 
@@ -70,7 +55,6 @@ def get_news():
     print("🌍 Scanning financial news...")
 
     history = get_history()
-
     all_entries = []
 
     for rss_url in RSS_FEEDS:
@@ -78,7 +62,9 @@ def get_news():
             feed = feedparser.parse(rss_url)
 
             for entry in feed.entries:
-                if entry.link not in history:
+                link = getattr(entry, "link", "")
+
+                if link and link not in history:
                     all_entries.append(entry)
 
         except Exception as e:
@@ -88,7 +74,6 @@ def get_news():
         print("ℹ️ No new news found.")
         return None
 
-    # Убираем дубликаты
     unique_entries = {}
 
     for entry in all_entries:
@@ -149,15 +134,18 @@ def clean_text(text):
     if not text:
         return ""
 
-    # Убираем Markdown
-    text = text.replace("**", "")
-    text = text.replace("__", "")
-    text = text.replace("```", "")
-    text = text.replace("`", "")
-    text = text.replace("~~", "")
+    replacements = [
+        ("**", ""),
+        ("__", ""),
+        ("```", ""),
+        ("`", ""),
+        ("~~", ""),
+    ]
 
-    # Убираем возможные заголовочные символы
-    lines = []
+    for old, new in replacements:
+        text = text.replace(old, new)
+
+    cleaned_lines = []
 
     for line in text.splitlines():
 
@@ -166,15 +154,70 @@ def clean_text(text):
         if line.startswith("#"):
             line = line.lstrip("#").strip()
 
-        lines.append(line)
+        cleaned_lines.append(line)
 
-    text = "\n".join(lines)
-
-    return text.strip()
+    return "\n".join(cleaned_lines).strip()
 
 
 # =========================
-# GENERATE AI CONTENT
+# GROQ REQUEST
+# =========================
+
+def ask_groq(client, prompt):
+
+    for attempt in range(1, 3):
+
+        print(f"🤖 Groq request attempt {attempt}/2...")
+
+        try:
+
+            completion = client.chat.completions.create(
+                model="openai/gpt-oss-20b",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Ты профессиональный русскоязычный "
+                            "финансовый редактор. "
+                            "Отвечай только на русском языке. "
+                            "Не используй Markdown."
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.4,
+                max_completion_tokens=1000
+            )
+
+            # Диагностика
+            print(f"📡 Groq finish reason: {completion.choices[0].finish_reason}")
+
+            message = completion.choices[0].message
+
+            text = message.content
+
+            if text and text.strip():
+
+                print("✅ Groq returned text!")
+
+                return text.strip()
+
+            print("⚠️ Groq returned empty content.")
+
+        except Exception as e:
+
+            print(f"⚠️ Groq attempt {attempt} error: {e}")
+
+    print("❌ Groq failed after 2 attempts.")
+
+    return None
+
+
+# =========================
+# GENERATE CONTENT
 # =========================
 
 def generate_content(news_entry=None):
@@ -182,80 +225,83 @@ def generate_content(news_entry=None):
     print("🤖 AI is analyzing with Groq...")
 
     if not GROQ_API_KEY:
+
         print("❌ GROQ_API_KEY is not configured!")
+
         return None
 
     try:
 
-        client = Groq(api_key=GROQ_API_KEY)
-
-        content_type = random.choice(CONTENT_TYPES)
+        client = Groq(
+            api_key=GROQ_API_KEY
+        )
 
         # =========================
         # NEWS
         # =========================
 
-        if content_type == "news" and news_entry:
+        if news_entry:
 
             prompt = f"""
-Ты — редактор современного русскоязычного финансового канала.
+Ты ведёшь русскоязычный финансовый канал.
 
-Проанализируй эту финансовую новость:
+Проанализируй новость:
 
-ЗАГОЛОВОК:
+Заголовок:
 {news_entry.title}
 
-ИСТОЧНИК:
+Источник:
 {news_entry.link}
 
-Создай пост для Telegram и короткую версию для X.
+Создай качественный пост для Telegram и короткую версию для X.
 
-Telegram:
+TELEGRAM:
 
 Напиши 3-6 небольших абзацев.
 
-Обязательно:
-- русский язык;
-- простое объяснение;
-- объясни, что произошло;
-- объясни, почему это важно;
-- объясни возможное влияние на обычных людей;
-- добавь практический вывод;
-- можно использовать эмодзи;
-- разрешён лёгкий юмор и ирония;
-- не выдумывай факты.
+Объясни:
+1. Что произошло.
+2. Почему это важно.
+3. Как это может повлиять на обычных людей.
+4. Какой можно сделать практический вывод.
 
-Очень важно:
+Можно использовать эмодзи.
+
+Можно использовать лёгкий юмор или иронию.
+
+НЕ выдумывай факты.
+
+НЕ добавляй информацию, которой нет в предоставленной новости.
+
+НЕ добавляй ссылку.
 
 НЕ используй Markdown.
 
-НЕ используй символы **
+НЕ используй **.
 
-НЕ используй символы *
+НЕ используй *.
 
-НЕ используй символы __
+НЕ используй __.
 
-НЕ используй обратные кавычки.
+НЕ используй `.
 
-НЕ используй заголовки с #.
+НЕ используй #.
 
-Пиши обычным чистым текстом.
+X_POST:
 
-Не добавляй ссылку на источник в Telegram.
+Напиши короткий пост максимум 280 символов.
 
-X:
+Русский язык.
 
-Создай короткий пост на русском языке.
-Максимум 280 символов.
 Можно использовать 1-2 хэштега.
 
-Также не используй Markdown.
+Без Markdown.
 
-В конце Telegram добавь:
+В конце Telegram:
 
 ⚠️ Материал носит информационный характер и не является индивидуальной финансовой рекомендацией.
 
-Формат:
+Формат ответа:
 
 TELEGRAM:
 текст
@@ -265,7 +311,7 @@ X_POST:
 """
 
         # =========================
-        # EDUCATIONAL CONTENT
+        # EDUCATION
         # =========================
 
         else:
@@ -273,31 +319,31 @@ X_POST:
             topic = generate_educational_topic()
 
             prompt = f"""
-Ты — автор современного русскоязычного финансового канала.
+Создай полезный пост для современного русскоязычного финансового канала.
 
 Тема:
 {topic}
 
-Создай полезный материал для обычного человека.
+Направления канала:
 
-Направления:
-- личные финансы;
-- управление деньгами;
-- инвестиционная грамотность;
-- увеличение дохода;
-- дополнительные источники дохода;
-- финансовые привычки;
-- предпринимательство;
-- работа и навыки;
-- использование ИИ для повышения продуктивности и дохода.
+личные финансы;
+управление деньгами;
+финансовая грамотность;
+инвестиции;
+увеличение дохода;
+дополнительный заработок;
+работа;
+полезные навыки;
+ИИ и заработок;
+предпринимательство.
 
 Стиль:
 
-Пиши как умный друг, который хорошо разбирается в деньгах.
+Умный друг, который хорошо разбирается в деньгах.
 
-Информация должна быть серьёзной и полезной, но текст должен быть живым.
+Текст должен быть серьёзным и полезным, но живым.
 
-Можно использовать лёгкий юмор и иронию.
+Можно использовать лёгкий юмор.
 
 Не обещай гарантированный заработок.
 
@@ -305,47 +351,43 @@ X_POST:
 
 Не придумывай статистику.
 
-Не советуй конкретно покупать или продавать финансовые активы.
+Не советуй конкретно покупать или продавать активы.
 
-Telegram:
+TELEGRAM:
 
 4-7 небольших абзацев.
 
-Используй подходящие эмодзи.
+Используй эмодзи.
 
-Дай конкретные и понятные советы.
+Дай конкретный практический совет.
 
-В конце сделай небольшой практический вывод.
-
-Очень важно:
+НЕ добавляй ссылки.
 
 НЕ используй Markdown.
 
-НЕ используй символы **
+НЕ используй **.
 
-НЕ используй символы *
+НЕ используй *.
 
-НЕ используй символы __
+НЕ используй __.
 
-НЕ используй обратные кавычки.
+НЕ используй `.
 
-НЕ используй заголовки с #.
+НЕ используй #.
 
-Пиши обычным чистым текстом.
-
-Не добавляй ссылки.
-
-В конце добавь:
+В конце:
 
 ⚠️ Материал носит информационный и образовательный характер и не является индивидуальной финансовой рекомендацией.
 
-X:
+X_POST:
 
-Короткая полезная мысль на русском языке.
+Короткая полезная мысль.
 
 Максимум 280 символов.
 
-Можно использовать 1-2 хэштега.
+Русский язык.
+
+Можно 1-2 хэштега.
 
 Без Markdown.
 
@@ -358,50 +400,47 @@ X_POST:
 текст
 """
 
-        # =========================
-        # GROQ REQUEST
-        # =========================
-
-        completion = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Ты качественный русскоязычный "
-                        "финансово-образовательный редактор. "
-                        "Никогда не используй Markdown."
-                    )
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0.5,
-            max_tokens=800
+        text = ask_groq(
+            client,
+            prompt
         )
 
-        text = completion.choices[0].message.content
-
         if not text:
-            print("❌ Groq returned an empty response.")
+
             return None
 
-        print("✅ Groq generated content!")
+        parts = text.split(
+            "X_POST:",
+            1
+        )
 
-        parts = text.split("X_POST:", 1)
-
-        telegram_text = parts[0].replace("TELEGRAM:", "").strip()
+        telegram_text = (
+            parts[0]
+            .replace("TELEGRAM:", "")
+            .strip()
+        )
 
         if len(parts) > 1:
+
             x_text = parts[1].strip()
+
         else:
+
             x_text = ""
 
-        # Дополнительная очистка
-        telegram_text = clean_text(telegram_text)
-        x_text = clean_text(x_text)
+        telegram_text = clean_text(
+            telegram_text
+        )
+
+        x_text = clean_text(
+            x_text
+        )
+
+        if not telegram_text:
+
+            print("❌ Telegram content is empty.")
+
+            return None
 
         return {
             "telegram": telegram_text,
@@ -421,16 +460,22 @@ X_POST:
 
 def send_telegram(text):
 
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+    if not TELEGRAM_BOT_TOKEN:
 
-        print("❌ Telegram credentials are not configured!")
+        print("❌ TELEGRAM_BOT_TOKEN is missing!")
 
-        return
+        return False
+
+    if not TELEGRAM_CHAT_ID:
+
+        print("❌ TELEGRAM_CHAT_ID is missing!")
+
+        return False
 
     try:
 
         url = (
-            f"https://api.telegram.org/"
+            "https://api.telegram.org/"
             f"bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         )
 
@@ -447,9 +492,13 @@ def send_telegram(text):
 
         print("✅ Sent to Telegram!")
 
+        return True
+
     except Exception as e:
 
         print(f"❌ Telegram Error: {e}")
+
+        return False
 
 
 # =========================
@@ -465,7 +514,10 @@ def post_to_x(tweet_text):
         X_ACCESS_SECRET
     ]):
 
-        print("⚠️ X API credentials are not configured. Skipping X.")
+        print(
+            "⚠️ X API credentials are not configured. "
+            "Skipping X."
+        )
 
         return
 
@@ -479,9 +531,15 @@ def post_to_x(tweet_text):
         )
 
         if len(tweet_text) > 280:
-            tweet_text = tweet_text[:277] + "..."
 
-        client_x.create_tweet(text=tweet_text)
+            tweet_text = (
+                tweet_text[:277]
+                + "..."
+            )
+
+        client_x.create_tweet(
+            text=tweet_text
+        )
 
         print("✅ Posted to X!")
 
@@ -501,14 +559,15 @@ if __name__ == "__main__":
     news = get_news()
 
     # 50/50:
-    # 50% новости
-    # 50% образовательный контент
+    # NEWS / EDUCATIONAL CONTENT
 
     if random.random() < 0.5 and news:
 
         print("📰 Content type: NEWS")
 
-        ai_content = generate_content(news)
+        ai_content = generate_content(
+            news
+        )
 
         history_link = news.link
 
@@ -516,28 +575,25 @@ if __name__ == "__main__":
 
         print("💡 Content type: EDUCATIONAL")
 
-        ai_content = generate_content(None)
+        ai_content = generate_content(
+            None
+        )
 
         history_link = None
 
     if ai_content:
 
-        # Отправляем только текст.
-        # Ссылка больше НЕ добавляется.
-
-        send_telegram(
+        telegram_success = send_telegram(
             ai_content["telegram"]
         )
 
-        # X
         if ai_content["x"]:
 
             post_to_x(
                 ai_content["x"]
             )
 
-        # Записываем новость в историю
-        if history_link:
+        if telegram_success and history_link:
 
             with open(
                 "history.txt",
@@ -545,10 +601,16 @@ if __name__ == "__main__":
                 encoding="utf-8"
             ) as f:
 
-                f.write(history_link + "\n")
+                f.write(
+                    history_link + "\n"
+                )
 
-        print("✅ Content processed successfully!")
+        print(
+            "✅ Content processed successfully!"
+        )
 
     else:
 
-        print("❌ Content generation failed.")
+        print(
+            "❌ Content generation failed."
+        )
