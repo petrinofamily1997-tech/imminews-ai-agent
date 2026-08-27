@@ -89,10 +89,8 @@ jobs:
 
           ffprobe \
             -v error \
-            -show_entries \
-            format=duration,size \
-            -show_entries \
-            stream=width,height,codec_name \
+            -show_entries format=duration,size \
+            -show_entries stream=width,height,codec_name \
             -of default=noprint_wrappers=1 \
             output/video.mp4
 
