@@ -19,19 +19,9 @@ load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 
-# Можно указать конкретный Voice ID ElevenLabs через GitHub Secret.
-# Если секрет не задан, попробуем получить первый доступный голос.
-ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "").strip()
-
-# Модель Groq
-GROQ_MODEL = os.getenv(
-    "GROQ_MODEL",
-    "llama-3.3-70b-versatile"
-)
-
-# Папки
 BASE_DIR = Path(__file__).resolve().parent
 
 MUSIC_DIR = BASE_DIR / "assets" / "music"
@@ -39,306 +29,146 @@ WORK_DIR = BASE_DIR / "video_work"
 OUTPUT_DIR = BASE_DIR / "output"
 
 AUDIO_FILE = WORK_DIR / "voice.mp3"
-MUSIC_FILE = WORK_DIR / "music.mp3"
 FINAL_VIDEO = OUTPUT_DIR / "video.mp4"
 
-# Вертикальное видео
 VIDEO_WIDTH = 1080
 VIDEO_HEIGHT = 1920
 
-# Музыка
-MUSIC_VOLUME = 0.07
+MUSIC_VOLUME = 0.06
 
-# Продолжительность
 MIN_VIDEO_SECONDS = 15
-MAX_VIDEO_SECONDS = 28
+MAX_VIDEO_SECONDS = 35
 
 
 # ============================================================
-# VALIDATION
+# GROQ MODEL SETTINGS
+# ============================================================
+
+# Приоритет моделей.
+# Сначала пытаемся использовать более мощную.
+# Если модель недоступна — пробуем следующую.
+
+PREFERRED_MODELS = [
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "qwen/qwen3.8-27b",
+    "qwen/qwen3.6-27b",
+]
+
+
+# ============================================================
+# ENVIRONMENT
 # ============================================================
 
 def check_environment():
+
     print("🔎 Checking environment...")
+
+    required = {
+        "GROQ_API_KEY": GROQ_API_KEY,
+        "ELEVENLABS_API_KEY": ELEVENLABS_API_KEY,
+        "ELEVENLABS_VOICE_ID": ELEVENLABS_VOICE_ID,
+        "PEXELS_API_KEY": PEXELS_API_KEY,
+    }
 
     missing = []
 
-    if not GROQ_API_KEY:
-        missing.append("GROQ_API_KEY")
-
-    if not ELEVENLABS_API_KEY:
-        missing.append("ELEVENLABS_API_KEY")
-
-    if not PEXELS_API_KEY:
-        missing.append("PEXELS_API_KEY")
+    for name, value in required.items():
+        if not value:
+            missing.append(name)
 
     if missing:
-        print("❌ Missing API keys:")
-        for key in missing:
-            print(f"   - {key}")
+
+        print("❌ Missing secrets:")
+
+        for item in missing:
+            print(f"   - {item}")
+
         return False
 
     if not shutil.which("ffmpeg"):
-        print("❌ FFmpeg is not installed or not available in PATH.")
+
+        print("❌ FFmpeg is not installed.")
+
         return False
 
     if not shutil.which("ffprobe"):
-        print("❌ FFprobe is not installed or not available in PATH.")
+
+        print("❌ FFprobe is not installed.")
+
         return False
 
-    MUSIC_DIR.mkdir(parents=True, exist_ok=True)
-    WORK_DIR.mkdir(parents=True, exist_ok=True)
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    MUSIC_DIR.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    WORK_DIR.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    OUTPUT_DIR.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
     print("✅ Environment OK")
+
     return True
 
 
 # ============================================================
-# CLEANUP
+# CLEAN WORK
 # ============================================================
 
 def clean_work_directory():
+
     print("🧹 Cleaning temporary files...")
 
     if WORK_DIR.exists():
+
         for item in WORK_DIR.iterdir():
+
             try:
+
                 if item.is_file():
+
                     item.unlink()
+
                 elif item.is_dir():
+
                     shutil.rmtree(item)
+
             except Exception as e:
-                print(f"⚠️ Could not delete {item}: {e}")
 
-    WORK_DIR.mkdir(parents=True, exist_ok=True)
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+                print(
+                    f"⚠️ Could not delete {item}: {e}"
+                )
 
-
-# ============================================================
-# GROQ
-# ============================================================
-
-def generate_script():
-    print("🧠 Asking Groq to create a script...")
-
-    client = Groq(api_key=GROQ_API_KEY)
-
-    styles = [
-        "PROVOCATIVE",
-        "ANALYTICAL",
-        "INTELLECTUAL",
-    ]
-
-    style = random.choice(styles)
-
-    print(f"🎩 Selected style: {style}")
-
-    system_prompt = """
-Ты — сценарист коротких вирусных финансовых видео.
-
-Создавай оригинальные сценарии на русском языке.
-
-Образ рассказчика:
-- интеллектуальный;
-- холодный;
-- наблюдательный;
-- уверенный;
-- немного ироничный;
-- иногда провокационный;
-- философский, но без лишней воды;
-- говорит со зрителем напрямую;
-- создаёт ощущение, что показывает скрытую сторону обычной вещи.
-
-ВАЖНО:
-Не копируй конкретных персонажей, блогеров, актёров или их голоса.
-Не упоминай профессора Мориарти, Мистера Фримена или других персонажей.
-Создавай самостоятельный образ.
-
-Структура:
-1. Очень сильный hook на первые 1–2 секунды.
-2. Интрига.
-3. Основная мысль.
-4. Неожиданный вывод.
-5. Мягкий переход к Telegram.
-
-Сценарий должен звучать естественно при озвучке.
-
-Не используй:
-- markdown;
-- **;
-- ссылки;
-- эмодзи внутри текста сценария;
-- длинные списки;
-- фразы вроде "сегодня мы поговорим";
-- "подпишись на канал" в каждом ролике;
-- обещания гарантированного заработка;
-- финансовые гарантии.
-
-Если речь идёт об инвестициях, обязательно избегай утверждений о гарантированной прибыли.
-
-Длина:
-примерно 70–110 слов.
-
-Верни строго JSON:
-{
-  "title": "...",
-  "style": "...",
-  "script": "...",
-  "pexels_queries": ["...", "...", "..."]
-}
-"""
-
-    user_prompt = f"""
-Создай один короткий финансовый ролик.
-
-Выбранный стиль:
-{style}
-
-Темы должны быть связаны с:
-- деньгами;
-- личными финансами;
-- психологией денег;
-- финансовыми привычками;
-- инвестиционной грамотностью;
-- банковскими продуктами;
-- заработком;
-- расходами;
-- инфляцией;
-- финансовыми ошибками.
-
-Не делай слишком банальную тему.
-
-Нужна идея, которая заставит человека остановить прокрутку.
-
-Верни только JSON.
-"""
-
-    try:
-        response = client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt
-                }
-            ],
-            temperature=0.85,
-            max_tokens=900,
-            response_format={"type": "json_object"},
-        )
-
-        text = response.choices[0].message.content or ""
-
-        if not text.strip():
-            print("❌ Groq returned empty response.")
-            return None
-
-        data = json.loads(text)
-
-        script = clean_text(data.get("script", ""))
-        title = clean_text(data.get("title", ""))
-        style = clean_text(data.get("style", style))
-
-        queries = data.get("pexels_queries", [])
-
-        if not isinstance(queries, list):
-            queries = []
-
-        queries = [
-            clean_search_query(str(q))
-            for q in queries
-            if str(q).strip()
-        ]
-
-        if not script:
-            print("❌ Groq generated an empty script.")
-            return None
-
-        print(f"📝 Title: {title}")
-        print(f"🎩 Style: {style}")
-        print(f"🎥 Pexels queries: {queries}")
-        print()
-        print("📜 SCRIPT:")
-        print(script)
-        print()
-
-        return {
-            "title": title,
-            "style": style,
-            "script": script,
-            "pexels_queries": queries[:5],
-        }
-
-    except Exception as e:
-        print(f"❌ Groq error: {e}")
-        return None
+    WORK_DIR.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
 
 # ============================================================
-# TEXT CLEANING
+# GET AVAILABLE GROQ MODELS
 # ============================================================
 
-def clean_text(text):
-    if not text:
-        return ""
+def get_available_groq_models():
 
-    text = str(text)
+    print("🔎 Checking available Groq models...")
 
-    # Убираем markdown
-    text = text.replace("**", "")
-    text = text.replace("__", "")
-    text = text.replace("```", "")
-    text = text.replace("`", "")
-
-    # Убираем возможные ссылки
-    text = re.sub(r"https?://\S+", "", text)
-
-    # Убираем лишние пробелы
-    text = re.sub(r"[ \t]+", " ", text)
-
-    # Убираем слишком много пустых строк
-    text = re.sub(r"\n{3,}", "\n\n", text)
-
-    return text.strip()
-
-
-def clean_search_query(text):
-    text = clean_text(text)
-
-    # Pexels лучше работает с короткими английскими запросами.
-    text = text.replace(",", " ")
-
-    words = text.split()
-
-    if len(words) > 6:
-        words = words[:6]
-
-    return " ".join(words)
-
-
-# ============================================================
-# ELEVENLABS
-# ============================================================
-
-def get_elevenlabs_voice():
-    if ELEVENLABS_VOICE_ID:
-        return ELEVENLABS_VOICE_ID
-
-    print("🎙️ No ELEVENLABS_VOICE_ID provided.")
-    print("🎙️ Trying to get first available voice...")
-
-    url = "https://api.elevenlabs.io/v1/voices"
+    url = "https://api.groq.com/openai/v1/models"
 
     headers = {
-        "xi-api-key": ELEVENLABS_API_KEY
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
     }
 
     try:
+
         response = requests.get(
             url,
             headers=headers,
@@ -349,38 +179,438 @@ def get_elevenlabs_voice():
 
         data = response.json()
 
-        voices = data.get("voices", [])
+        models = data.get("data", [])
 
-        if not voices:
-            print("❌ No ElevenLabs voices available.")
-            return None
+        model_ids = []
 
-        voice_id = voices[0].get("voice_id")
+        for model in models:
 
-        if voice_id:
-            print(
-                f"🎙️ Using ElevenLabs voice: "
-                f"{voices[0].get('name', 'Unknown')}"
-            )
+            model_id = model.get("id")
 
-        return voice_id
+            if model_id:
+                model_ids.append(model_id)
+
+        print(
+            f"✅ Groq reports "
+            f"{len(model_ids)} available models."
+        )
+
+        return model_ids
 
     except Exception as e:
-        print(f"❌ ElevenLabs voice error: {e}")
+
+        print(
+            f"⚠️ Could not retrieve Groq models: {e}"
+        )
+
+        return []
+
+
+# ============================================================
+# SELECT GROQ MODEL
+# ============================================================
+
+def select_groq_models():
+
+    available = get_available_groq_models()
+
+    selected = []
+
+    # Сначала наши предпочтительные модели
+
+    for model in PREFERRED_MODELS:
+
+        if model in available:
+
+            selected.append(model)
+
+    # Если ничего не найдено,
+    # ищем текстовые instruct/chat модели.
+
+    if not selected:
+
+        for model in available:
+
+            model_lower = model.lower()
+
+            if any(
+                x in model_lower
+                for x in [
+                    "gpt-oss",
+                    "qwen",
+                    "llama"
+                ]
+            ):
+
+                selected.append(model)
+
+    # Убираем дубликаты
+
+    selected = list(dict.fromkeys(selected))
+
+    print("🧠 Models selected for fallback:")
+
+    for model in selected:
+
+        print(f"   → {model}")
+
+    return selected
+
+
+# ============================================================
+# TEXT CLEANING
+# ============================================================
+
+def clean_text(text):
+
+    if not text:
+        return ""
+
+    text = str(text)
+
+    text = text.replace("**", "")
+    text = text.replace("__", "")
+    text = text.replace("```", "")
+    text = text.replace("`", "")
+
+    text = re.sub(
+        r"https?://\S+",
+        "",
+        text
+    )
+
+    text = re.sub(
+        r"[ \t]+",
+        " ",
+        text
+    )
+
+    text = re.sub(
+        r"\n{3,}",
+        "\n\n",
+        text
+    )
+
+    return text.strip()
+
+
+def clean_search_query(text):
+
+    text = clean_text(text)
+
+    text = text.replace(",", " ")
+
+    words = text.split()
+
+    return " ".join(words[:6])
+
+
+# ============================================================
+# GENERATE SCRIPT
+# ============================================================
+
+def generate_script():
+
+    print("🧠 Asking Groq to create a script...")
+
+    models = select_groq_models()
+
+    if not models:
+
+        print(
+            "❌ No compatible Groq models found."
+        )
+
         return None
 
+    styles = [
+        "PROVOCATIVE",
+        "ANALYTICAL",
+        "INTELLECTUAL",
+        "DARK",
+        "PHILOSOPHICAL",
+    ]
+
+    style = random.choice(styles)
+
+    print(
+        f"🎩 Selected style: {style}"
+    )
+
+    system_prompt = """
+Ты — сценарист коротких вирусных финансовых видео.
+
+Пиши исключительно на русском языке.
+
+Стиль рассказчика:
+
+- умный;
+- холодный;
+- спокойный;
+- уверенный;
+- слегка провокационный;
+- философский;
+- иногда саркастичный;
+- без дешёвого кликбейта;
+- говорит прямо со зрителем.
+
+Создавай полностью оригинальный образ рассказчика.
+
+НЕ копируй конкретных персонажей,
+актёров, блогеров или их голоса.
+
+Не упоминай:
+Мориарти,
+Мистера Фримена,
+других персонажей или авторов.
+
+Видео должно ощущаться как монолог умного человека,
+который показывает зрителю то,
+что тот обычно не замечает.
+
+Тема:
+
+Финансы.
+Деньги.
+Привычки.
+Инвестиции.
+Заработок.
+Психология денег.
+Расходы.
+Инфляция.
+Банки.
+Финансовые ошибки.
+Богатство.
+Личные финансы.
+
+Структура:
+
+HOOK
+↓
+ИНТРИГА
+↓
+ФАКТ / ИДЕЯ
+↓
+НЕОЖИДАННЫЙ ВЫВОД
+↓
+МЯГКИЙ CTA
+
+Первые слова должны заставлять
+человека перестать листать видео.
+
+Не начинай:
+
+"Сегодня мы поговорим..."
+"В этом видео..."
+"Привет всем..."
+
+Не используй:
+
+Markdown.
+**
+Ссылки.
+URL.
+Хэштеги.
+Служебные комментарии.
+
+Не используй эмодзи внутри сценария.
+
+Не обещай гарантированную прибыль.
+
+Не давай персональных инвестиционных рекомендаций.
+
+Длина:
+80–130 слов.
+
+Верни ТОЛЬКО JSON.
+
+Формат:
+
+{
+    "title": "...",
+    "style": "...",
+    "script": "...",
+    "pexels_queries": [
+        "...",
+        "...",
+        "..."
+    ]
+}
+"""
+
+    user_prompt = f"""
+Создай сценарий одного короткого видео.
+
+Стиль:
+{style}
+
+Нужна необычная финансовая тема,
+которая вызывает желание досмотреть ролик.
+
+Сделай текст естественным для озвучки.
+
+Не перегружай фактами.
+
+Главное:
+интерес,
+напряжение,
+любопытство,
+сильный финальный вывод.
+
+Верни только JSON.
+"""
+
+    client = Groq(
+        api_key=GROQ_API_KEY
+    )
+
+    for model in models:
+
+        print()
+        print(
+            f"🤖 Trying Groq model: {model}"
+        )
+
+        try:
+
+            response = client.chat.completions.create(
+
+                model=model,
+
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_prompt
+                    },
+                    {
+                        "role": "user",
+                        "content": user_prompt
+                    }
+                ],
+
+                temperature=0.85,
+
+                max_tokens=1200,
+
+                response_format={
+                    "type": "json_object"
+                }
+            )
+
+            text = (
+                response.choices[0]
+                .message.content
+                or ""
+            )
+
+            if not text.strip():
+
+                print(
+                    "⚠️ Empty response."
+                )
+
+                continue
+
+            data = json.loads(text)
+
+            script = clean_text(
+                data.get("script", "")
+            )
+
+            title = clean_text(
+                data.get("title", "")
+            )
+
+            generated_style = clean_text(
+                data.get(
+                    "style",
+                    style
+                )
+            )
+
+            queries = data.get(
+                "pexels_queries",
+                []
+            )
+
+            if not isinstance(
+                queries,
+                list
+            ):
+
+                queries = []
+
+            queries = [
+                clean_search_query(q)
+                for q in queries
+                if str(q).strip()
+            ]
+
+            if not script:
+
+                print(
+                    "⚠️ Empty script."
+                )
+
+                continue
+
+            print(
+                f"✅ Groq model working: {model}"
+            )
+
+            print()
+            print(
+                f"📝 Title: {title}"
+            )
+
+            print(
+                f"🎩 Style: {generated_style}"
+            )
+
+            print()
+            print("📜 SCRIPT:")
+            print(script)
+            print()
+
+            return {
+                "title": title,
+                "style": generated_style,
+                "script": script,
+                "pexels_queries": queries[:5],
+                "model": model,
+            }
+
+        except Exception as e:
+
+            error_text = str(e)
+
+            print(
+                f"⚠️ Model failed: {error_text[:500]}"
+            )
+
+            continue
+
+    print()
+    print(
+        "❌ All Groq models failed."
+    )
+
+    return None
+
+
+# ============================================================
+# ELEVENLABS
+# ============================================================
 
 def generate_voice(script):
-    print("🎙️ Generating Russian voice with ElevenLabs...")
 
-    voice_id = get_elevenlabs_voice()
-
-    if not voice_id:
-        return False
+    print(
+        "🎙️ Generating Russian voice with ElevenLabs..."
+    )
 
     url = (
-        f"https://api.elevenlabs.io/v1/"
-        f"text-to-speech/{voice_id}"
+        "https://api.elevenlabs.io/v1/"
+        f"text-to-speech/{ELEVENLABS_VOICE_ID}"
     )
 
     headers = {
@@ -390,48 +620,79 @@ def generate_voice(script):
     }
 
     payload = {
+
         "text": script,
-        "model_id": "eleven_multilingual_v2",
+
+        "model_id":
+            "eleven_multilingual_v2",
+
         "voice_settings": {
-            "stability": 0.55,
+
+            "stability": 0.52,
+
             "similarity_boost": 0.78,
-            "style": 0.30,
+
+            "style": 0.32,
+
             "use_speaker_boost": True
         }
     }
 
     try:
+
         response = requests.post(
+
             url,
+
             headers=headers,
+
             json=payload,
+
             timeout=120
         )
 
         if response.status_code != 200:
+
             print(
                 f"❌ ElevenLabs error "
-                f"{response.status_code}: "
-                f"{response.text[:1000]}"
+                f"{response.status_code}"
             )
+
+            print(
+                response.text[:1000]
+            )
+
             return False
 
         if not response.content:
-            print("❌ ElevenLabs returned empty audio.")
+
+            print(
+                "❌ Empty ElevenLabs response."
+            )
+
             return False
 
-        with open(AUDIO_FILE, "wb") as f:
-            f.write(response.content)
+        with open(
+            AUDIO_FILE,
+            "wb"
+        ) as file:
+
+            file.write(
+                response.content
+            )
 
         print(
-            f"✅ Voice generated: "
-            f"{AUDIO_FILE}"
+            "✅ Voice generated."
         )
 
         return True
 
     except Exception as e:
-        print(f"❌ ElevenLabs request error: {e}")
+
+        print(
+            f"❌ ElevenLabs error: {e}"
+        )
+
         return False
 
 
@@ -440,172 +701,247 @@ def generate_voice(script):
 # ============================================================
 
 def search_pexels_video(query):
-    print(f"🔎 Pexels search: {query}")
 
-    url = "https://api.pexels.com/videos/search"
+    print(
+        f"🔎 Pexels search: {query}"
+    )
+
+    url = (
+        "https://api.pexels.com/videos/search"
+    )
 
     headers = {
-        "Authorization": PEXELS_API_KEY
+        "Authorization":
+            PEXELS_API_KEY
     }
 
     params = {
+
         "query": query,
-        "orientation": "portrait",
-        "size": "medium",
-        "per_page": 10,
-        "locale": "en-US",
+
+        "orientation":
+            "portrait",
+
+        "size":
+            "medium",
+
+        "per_page":
+            10,
+
+        "locale":
+            "en-US",
     }
 
     try:
+
         response = requests.get(
+
             url,
+
             headers=headers,
+
             params=params,
+
             timeout=30
         )
 
         if response.status_code != 200:
+
             print(
                 f"⚠️ Pexels error "
-                f"{response.status_code}: "
-                f"{response.text[:500]}"
+                f"{response.status_code}"
             )
+
             return None
 
         data = response.json()
 
-        videos = data.get("videos", [])
+        videos = data.get(
+            "videos",
+            []
+        )
 
         if not videos:
-            print("⚠️ No videos found.")
+
             return None
 
-        # Выбираем случайное видео из результатов
-        video = random.choice(videos)
+        random.shuffle(videos)
 
-        files = video.get("video_files", [])
+        for video in videos:
 
-        if not files:
-            return None
-
-        # Предпочитаем вертикальное видео
-        portrait_files = [
-            f for f in files
-            if f.get("width", 0) < f.get("height", 0)
-        ]
-
-        candidates = portrait_files or files
-
-        # Ищем файл разумного качества
-        candidates = sorted(
-            candidates,
-            key=lambda x: (
-                abs(
-                    (x.get("width", 0) or 0)
-                    - 1080
-                ),
-                -(x.get("height", 0) or 0)
+            files = video.get(
+                "video_files",
+                []
             )
-        )
 
-        chosen = candidates[0]
+            portrait = [
 
-        link = chosen.get("link")
+                f for f in files
 
-        if not link:
-            return None
+                if (
+                    f.get("width", 0)
+                    <
+                    f.get("height", 0)
+                )
+            ]
 
-        print(
-            f"🎥 Selected Pexels video "
-            f"{chosen.get('width')}x"
-            f"{chosen.get('height')}"
-        )
+            candidates = (
+                portrait or files
+            )
 
-        return link
+            if not candidates:
+                continue
+
+            candidates.sort(
+                key=lambda x:
+                    abs(
+                        (
+                            x.get(
+                                "width",
+                                0
+                            )
+                            or 0
+                        ) - 1080
+                    )
+            )
+
+            link = candidates[0].get(
+                "link"
+            )
+
+            if link:
+
+                return link
+
+        return None
 
     except Exception as e:
-        print(f"⚠️ Pexels request error: {e}")
+
+        print(
+            f"⚠️ Pexels error: {e}"
+        )
+
         return None
 
 
-def download_file(url, destination):
-    print(f"⬇️ Downloading: {url[:100]}...")
+def download_video(url, destination):
+
+    print(
+        "⬇️ Downloading video..."
+    )
 
     try:
+
         response = requests.get(
+
             url,
+
             stream=True,
+
             timeout=120
         )
 
         response.raise_for_status()
 
-        with open(destination, "wb") as f:
+        with open(
+            destination,
+            "wb"
+        ) as file:
+
             for chunk in response.iter_content(
                 chunk_size=1024 * 1024
             ):
-                if chunk:
-                    f.write(chunk)
 
-        if destination.stat().st_size < 10_000:
-            print("⚠️ Downloaded file is suspiciously small.")
+                if chunk:
+
+                    file.write(
+                        chunk
+                    )
+
+        if destination.stat().st_size < 10000:
+
             return False
 
         return True
 
     except Exception as e:
-        print(f"❌ Download error: {e}")
+
+        print(
+            f"❌ Download error: {e}"
+        )
+
         return False
 
 
 def get_video_clips(queries):
-    """
-    Скачиваем до 3 коротких видео.
-    Если один запрос не работает, пробуем следующий.
-    """
+
+    print(
+        "🎥 Searching for video footage..."
+    )
+
+    fallback = [
+
+        "money finance",
+
+        "business",
+
+        "banking",
+
+        "stock market",
+
+        "city night",
+
+        "smartphone",
+
+        "office",
+
+        "person thinking",
+    ]
+
+    all_queries = (
+        queries +
+        fallback
+    )
 
     clips = []
 
-    fallback_queries = [
-        "money finance",
-        "business finance",
-        "bank money",
-        "city business",
-        "person using smartphone",
-    ]
-
-    all_queries = queries + fallback_queries
-
-    used_links = set()
+    used = set()
 
     for query in all_queries:
 
         if len(clips) >= 3:
             break
 
-        link = search_pexels_video(query)
+        link = search_pexels_video(
+            query
+        )
 
         if not link:
             continue
 
-        if link in used_links:
+        if link in used:
             continue
 
-        used_links.add(link)
+        used.add(link)
 
         destination = (
             WORK_DIR /
-            f"clip_{len(clips) + 1}.mp4"
+            f"clip_{len(clips)+1}.mp4"
         )
 
-        if download_file(link, destination):
-            clips.append(destination)
+        if download_video(
+            link,
+            destination
+        ):
 
-    if not clips:
-        print("❌ Could not download any Pexels video.")
-        return []
+            clips.append(
+                destination
+            )
 
-    print(f"✅ Downloaded {len(clips)} video clip(s).")
+    print(
+        f"✅ Downloaded "
+        f"{len(clips)} clips."
+    )
 
     return clips
 
@@ -615,103 +951,145 @@ def get_video_clips(queries):
 # ============================================================
 
 def get_music():
-    print("🎵 Looking for music...")
 
-    if not MUSIC_DIR.exists():
-        print(f"⚠️ Music directory does not exist: {MUSIC_DIR}")
-        return None
-
-    tracks = list(MUSIC_DIR.glob("*.mp3"))
+    tracks = list(
+        MUSIC_DIR.glob("*.mp3")
+    )
 
     if not tracks:
-        print("⚠️ No MP3 files found.")
+
+        print(
+            "⚠️ No music found."
+        )
+
         return None
 
-    selected = random.choice(tracks)
+    track = random.choice(
+        tracks
+    )
 
-    print(f"🎵 Selected: {selected.name}")
+    print(
+        f"🎵 Music: {track.name}"
+    )
 
-    return selected
+    return track
 
 
 # ============================================================
-# VIDEO INFORMATION
+# DURATION
 # ============================================================
 
-def get_duration(file_path):
+def get_duration(file):
+
     command = [
+
         "ffprobe",
+
         "-v",
         "error",
+
         "-show_entries",
         "format=duration",
+
         "-of",
         "default=noprint_wrappers=1:nokey=1",
-        str(file_path)
+
+        str(file)
     ]
 
     try:
+
         result = subprocess.run(
+
             command,
+
             capture_output=True,
+
             text=True,
+
             check=True
         )
 
-        return float(result.stdout.strip())
+        return float(
+            result.stdout.strip()
+        )
 
-    except Exception as e:
-        print(f"⚠️ Could not read duration: {e}")
+    except:
+
         return 0
 
 
 # ============================================================
-# VIDEO PREPARATION
+# PREPARE CLIPS
 # ============================================================
 
-def prepare_clip(input_file, output_file, duration):
-    """
-    Приводим любой Pexels ролик к 1080x1920.
-    Видео центрируется и заполняет вертикальный кадр.
-    """
+def prepare_clip(
+    input_file,
+    output_file,
+    duration
+):
 
     command = [
+
         "ffmpeg",
+
         "-y",
-        "-stream_loop", "-1",
-        "-i", str(input_file),
-        "-t", str(duration),
+
+        "-stream_loop",
+        "-1",
+
+        "-i",
+        str(input_file),
+
+        "-t",
+        str(duration),
+
         "-vf",
+
         (
             "scale=1080:1920:"
             "force_original_aspect_ratio=increase,"
             "crop=1080:1920,"
             "setsar=1"
         ),
+
         "-an",
-        "-r", "30",
-        "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-crf", "23",
-        "-pix_fmt", "yuv420p",
+
+        "-r",
+        "30",
+
+        "-c:v",
+        "libx264",
+
+        "-preset",
+        "veryfast",
+
+        "-crf",
+        "23",
+
+        "-pix_fmt",
+        "yuv420p",
+
         str(output_file)
     ]
 
     try:
+
         subprocess.run(
+
             command,
+
             stdout=subprocess.PIPE,
+
             stderr=subprocess.PIPE,
+
             check=True
         )
 
         return True
 
-    except subprocess.CalledProcessError as e:
-        print(
-            "❌ FFmpeg clip error:"
-        )
-        print(e.stderr.decode(errors="ignore")[-2000:])
+    except:
+
         return False
 
 
@@ -719,45 +1097,67 @@ def prepare_clip(input_file, output_file, duration):
 # SUBTITLES
 # ============================================================
 
-def make_subtitle_file(script, duration):
-    """
-    Создаём простой SRT.
-
-    Текст разбиваем на короткие фразы.
-    """
+def make_subtitles(
+    script,
+    duration
+):
 
     words = script.split()
 
-    if not words:
-        return None
-
-    # Примерно 5–8 слов на экран
     chunks = []
 
     current = []
 
     for word in words:
+
         current.append(word)
 
-        if len(current) >= 7:
-            chunks.append(" ".join(current))
+        if len(current) >= 6:
+
+            chunks.append(
+                " ".join(current)
+            )
+
             current = []
 
     if current:
-        chunks.append(" ".join(current))
+
+        chunks.append(
+            " ".join(current)
+        )
 
     if not chunks:
+
         return None
 
-    chunk_duration = duration / len(chunks)
+    subtitle_file = (
+        WORK_DIR /
+        "subtitles.srt"
+    )
 
-    srt_file = WORK_DIR / "subtitles.srt"
+    chunk_duration = (
+        duration /
+        len(chunks)
+    )
 
-    def format_time(seconds):
-        hours = int(seconds // 3600)
-        minutes = int((seconds % 3600) // 60)
-        secs = int(seconds % 60)
-        millis = int((seconds - int(seconds)) * 1000)
+    def timestamp(seconds):
+
+        hours = int(
+            seconds // 3600
+        )
+
+        minutes = int(
+            (seconds % 3600) // 60
+        )
+
+        secs = int(
+            seconds % 60
+        )
+
+        millis = int(
+            (seconds -
+             int(seconds)) * 1000
+        )
 
         return (
             f"{hours:02d}:"
@@ -767,48 +1167,72 @@ def make_subtitle_file(script, duration):
         )
 
     with open(
-        srt_file,
+        subtitle_file,
         "w",
         encoding="utf-8"
-    ) as f:
+    ) as file:
 
-        for i, chunk in enumerate(chunks):
+        for i, chunk in enumerate(
+            chunks
+        ):
 
-            start = i * chunk_duration
+            start = (
+                i *
+                chunk_duration
+            )
+
             end = min(
-                (i + 1) * chunk_duration,
+                (i + 1) *
+                chunk_duration,
                 duration
             )
 
-            f.write(f"{i + 1}\n")
-            f.write(
-                f"{format_time(start)} --> "
-                f"{format_time(end)}\n"
+            file.write(
+                f"{i+1}\n"
             )
-            f.write(chunk)
-            f.write("\n\n")
 
-    return srt_file
+            file.write(
+                f"{timestamp(start)} --> "
+                f"{timestamp(end)}\n"
+            )
+
+            file.write(
+                chunk
+            )
+
+            file.write(
+                "\n\n"
+            )
+
+    return subtitle_file
 
 
 # ============================================================
 # CREATE VIDEO
 # ============================================================
 
-def create_video(clips, script, music):
-    print("🎬 Creating final video...")
+def create_video(
+    clips,
+    script,
+    music
+):
 
-    if not clips:
-        print("❌ No video clips.")
-        return False
+    print(
+        "🎬 Creating final video..."
+    )
 
-    voice_duration = get_duration(AUDIO_FILE)
+    voice_duration = get_duration(
+        AUDIO_FILE
+    )
 
     if voice_duration <= 0:
-        print("❌ Could not determine voice duration.")
+
+        print(
+            "❌ Invalid voice duration."
+        )
+
         return False
 
-    # Ограничиваем длительность
     duration = max(
         MIN_VIDEO_SECONDS,
         min(
@@ -817,103 +1241,133 @@ def create_video(clips, script, music):
         )
     )
 
-    print(f"⏱️ Target duration: {duration:.2f}s")
-
-    # Если голос длиннее лимита, пока оставляем его полностью.
     if voice_duration > MAX_VIDEO_SECONDS:
+
         duration = voice_duration
 
-    prepared_clips = []
+    print(
+        f"⏱️ Duration: "
+        f"{duration:.2f}s"
+    )
 
-    # Длительность каждого куска
-    clip_duration = duration / len(clips)
+    prepared = []
 
-    for index, clip in enumerate(clips):
+    clip_duration = (
+        duration /
+        len(clips)
+    )
 
-        prepared = (
+    for i, clip in enumerate(
+        clips
+    ):
+
+        output = (
             WORK_DIR /
-            f"prepared_{index + 1}.mp4"
+            f"prepared_{i}.mp4"
         )
 
         if prepare_clip(
             clip,
-            prepared,
+            output,
             clip_duration
         ):
-            prepared_clips.append(prepared)
 
-    if not prepared_clips:
-        print("❌ Could not prepare clips.")
-        return False
-
-    # Создаём concat-файл
-    concat_file = WORK_DIR / "concat.txt"
-
-    with open(
-        concat_file,
-        "w",
-        encoding="utf-8"
-    ) as f:
-
-        for clip in prepared_clips:
-            # FFmpeg concat требует безопасный путь.
-            absolute_path = clip.resolve()
-            f.write(
-                f"file '{absolute_path}'\n"
+            prepared.append(
+                output
             )
 
-    merged_video = WORK_DIR / "merged.mp4"
+    if not prepared:
 
-    command_merge = [
+        return False
+
+    concat = (
+        WORK_DIR /
+        "concat.txt"
+    )
+
+    with open(
+        concat,
+        "w",
+        encoding="utf-8"
+    ) as file:
+
+        for clip in prepared:
+
+            file.write(
+                f"file '{clip.resolve()}'\n"
+            )
+
+    merged = (
+        WORK_DIR /
+        "merged.mp4"
+    )
+
+    merge_command = [
+
         "ffmpeg",
+
         "-y",
-        "-f", "concat",
-        "-safe", "0",
-        "-i", str(concat_file),
-        "-c", "copy",
-        str(merged_video)
+
+        "-f",
+        "concat",
+
+        "-safe",
+        "0",
+
+        "-i",
+        str(concat),
+
+        "-c",
+        "copy",
+
+        str(merged)
     ]
 
     try:
+
         subprocess.run(
-            command_merge,
+
+            merge_command,
+
             stdout=subprocess.PIPE,
+
             stderr=subprocess.PIPE,
+
             check=True
         )
-    except subprocess.CalledProcessError as e:
-        print("❌ Could not merge video clips.")
+
+    except Exception as e:
+
         print(
-            e.stderr.decode(errors="ignore")[-3000:]
+            f"❌ Merge error: {e}"
         )
+
         return False
 
-    # Субтитры
-    subtitle_file = make_subtitle_file(
+    subtitle_file = make_subtitles(
         script,
         duration
     )
 
-    # Музыка может отсутствовать — это допустимо.
-    if music:
-        music_input = str(music)
-    else:
-        music_input = None
+    if not subtitle_file:
 
-    # --------------------------------------------------------
-    # FINAL FFMPEG
-    # --------------------------------------------------------
+        return False
 
-    # Используем ASS-подобный стиль через subtitles filter.
-    # SRT будет отображаться крупно по центру/ниже центра.
-    subtitle_path = str(
-        subtitle_file.resolve()
-    ).replace("\\", "/").replace(":", "\\:")
+    subtitle_path = (
+        str(
+            subtitle_file.resolve()
+        )
+        .replace("\\", "/")
+        .replace(":", "\\:")
+    )
 
     video_filter = (
+
         f"subtitles='{subtitle_path}':"
-        "force_style="
-        "'FontName=Arial,"
+
+        "force_style='"
+
+        "FontName=Arial,"
         "FontSize=20,"
         "Bold=1,"
         "PrimaryColour=&H00FFFFFF,"
@@ -922,31 +1376,40 @@ def create_video(clips, script, music):
         "Outline=3,"
         "Shadow=1,"
         "Alignment=2,"
-        "MarginV=420'"
+        "MarginV=420"
+
+        "'"
     )
 
-    if music_input:
+    if music:
 
         command = [
+
             "ffmpeg",
+
             "-y",
 
-            "-i", str(merged_video),
-            "-i", str(AUDIO_FILE),
-            "-stream_loop", "-1",
-            "-i", music_input,
+            "-i",
+            str(merged),
+
+            "-i",
+            str(AUDIO_FILE),
+
+            "-stream_loop",
+            "-1",
+
+            "-i",
+            str(music),
 
             "-filter_complex",
 
             (
-                "[0:a]"
+                "[1:a]"
                 "volume=1.0"
                 "[voice];"
 
                 "[2:a]"
-                f"volume={MUSIC_VOLUME},"
-                f"atrim=0:{duration},"
-                "asetpts=N/SR/TB"
+                f"volume={MUSIC_VOLUME}"
                 "[music];"
 
                 "[voice][music]"
@@ -956,23 +1419,38 @@ def create_video(clips, script, music):
                 "[audio]"
             ),
 
-            "-vf", video_filter,
+            "-vf",
+            video_filter,
 
-            "-map", "0:v:0",
-            "-map", "[audio]",
+            "-map",
+            "0:v:0",
 
-            "-t", str(duration),
+            "-map",
+            "[audio]",
 
-            "-c:v", "libx264",
-            "-preset", "medium",
-            "-crf", "22",
+            "-t",
+            str(duration),
 
-            "-c:a", "aac",
-            "-b:a", "192k",
+            "-c:v",
+            "libx264",
 
-            "-pix_fmt", "yuv420p",
+            "-preset",
+            "medium",
 
-            "-movflags", "+faststart",
+            "-crf",
+            "22",
+
+            "-c:a",
+            "aac",
+
+            "-b:a",
+            "192k",
+
+            "-pix_fmt",
+            "yuv420p",
+
+            "-movflags",
+            "+faststart",
 
             str(FINAL_VIDEO)
         ]
@@ -980,68 +1458,108 @@ def create_video(clips, script, music):
     else:
 
         command = [
+
             "ffmpeg",
+
             "-y",
 
-            "-i", str(merged_video),
-            "-i", str(AUDIO_FILE),
+            "-i",
+            str(merged),
 
-            "-vf", video_filter,
+            "-i",
+            str(AUDIO_FILE),
 
-            "-map", "0:v:0",
-            "-map", "1:a:0",
+            "-vf",
+            video_filter,
 
-            "-t", str(duration),
+            "-map",
+            "0:v:0",
 
-            "-c:v", "libx264",
-            "-preset", "medium",
-            "-crf", "22",
+            "-map",
+            "1:a:0",
 
-            "-c:a", "aac",
-            "-b:a", "192k",
+            "-t",
+            str(duration),
 
-            "-pix_fmt", "yuv420p",
+            "-c:v",
+            "libx264",
 
-            "-movflags", "+faststart",
+            "-preset",
+            "medium",
+
+            "-crf",
+            "22",
+
+            "-c:a",
+            "aac",
+
+            "-b:a",
+            "192k",
+
+            "-pix_fmt",
+            "yuv420p",
+
+            "-movflags",
+            "+faststart",
 
             str(FINAL_VIDEO)
         ]
 
-    print("✂️ Rendering final MP4...")
+    print(
+        "✂️ Rendering MP4..."
+    )
 
     try:
+
         result = subprocess.run(
+
             command,
+
             stdout=subprocess.PIPE,
+
             stderr=subprocess.PIPE,
+
             check=True
         )
 
         if not FINAL_VIDEO.exists():
-            print("❌ Final video was not created.")
+
+            print(
+                "❌ Video not created."
+            )
+
             return False
 
-        size_mb = (
+        size = (
             FINAL_VIDEO.stat().st_size
-            / 1024
-            / 1024
+            /
+            1024
+            /
+            1024
         )
 
         print(
-            f"✅ VIDEO CREATED: "
-            f"{FINAL_VIDEO}"
+            f"✅ VIDEO CREATED"
         )
+
         print(
-            f"📦 Size: {size_mb:.2f} MB"
+            f"📦 Size: {size:.2f} MB"
         )
 
         return True
 
     except subprocess.CalledProcessError as e:
-        print("❌ Final FFmpeg error:")
+
         print(
-            e.stderr.decode(errors="ignore")[-5000:]
+            "❌ FFmpeg error:"
         )
+
+        print(
+            e.stderr.decode(
+                errors="ignore"
+            )[-5000:]
+        )
+
         return False
 
 
@@ -1052,80 +1570,109 @@ def create_video(clips, script, music):
 def main():
 
     print()
-    print("======================================")
-    print("🎬 FINANCIAL VIDEO BOT")
-    print("======================================")
+    print(
+        "======================================"
+    )
+    print(
+        "🎬 FINANCIAL VIDEO BOT"
+    )
+    print(
+        "======================================"
+    )
     print()
 
     if not check_environment():
+
         return 1
 
     clean_work_directory()
 
-    # --------------------------------------------------------
-    # 1. Generate script
-    # --------------------------------------------------------
+    # --------------------------------
+    # GROQ
+    # --------------------------------
 
     content = generate_script()
 
     if not content:
-        print("❌ Content generation failed.")
+
+        print(
+            "❌ Content generation failed."
+        )
+
         return 1
 
-    # --------------------------------------------------------
-    # 2. Generate voice
-    # --------------------------------------------------------
+    # --------------------------------
+    # ELEVENLABS
+    # --------------------------------
 
-    if not generate_voice(content["script"]):
-        print("❌ Voice generation failed.")
+    if not generate_voice(
+        content["script"]
+    ):
+
+        print(
+            "❌ Voice generation failed."
+        )
+
         return 1
 
-    # --------------------------------------------------------
-    # 3. Pexels
-    # --------------------------------------------------------
+    # --------------------------------
+    # PEXELS
+    # --------------------------------
 
     clips = get_video_clips(
         content["pexels_queries"]
     )
 
     if not clips:
-        print("❌ Video generation failed: no clips.")
+
+        print(
+            "❌ Could not find video footage."
+        )
+
         return 1
 
-    # --------------------------------------------------------
-    # 4. Music
-    # --------------------------------------------------------
+    # --------------------------------
+    # MUSIC
+    # --------------------------------
 
     music = get_music()
 
-    if not music:
-        print(
-            "⚠️ No music found. "
-            "Video will be created without background music."
-        )
-
-    # --------------------------------------------------------
-    # 5. Render
-    # --------------------------------------------------------
+    # --------------------------------
+    # VIDEO
+    # --------------------------------
 
     if not create_video(
+
         clips,
+
         content["script"],
+
         music
+
     ):
-        print("❌ Video rendering failed.")
+
+        print(
+            "❌ Video rendering failed."
+        )
+
         return 1
 
     print()
-    print("======================================")
-    print("🎉 VIDEO BOT FINISHED")
-    print("======================================")
-    print()
-    print(f"🎬 {FINAL_VIDEO}")
-    print()
+    print(
+        "======================================"
+    )
+    print(
+        "🎉 VIDEO BOT FINISHED"
+    )
+    print(
+        "======================================"
+    )
 
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+
+    raise SystemExit(
+        main()
+    )
