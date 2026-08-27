@@ -1,6 +1,7 @@
 import os
 import random
 import re
+import base64
 import feedparser
 import requests
 import tweepy
@@ -23,16 +24,39 @@ X_API_SECRET = os.environ.get("X_API_SECRET")
 X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN")
 X_ACCESS_SECRET = os.environ.get("X_ACCESS_SECRET")
 
+# Cloudflare
+CLOUDFLARE_API_KEY = os.environ.get("CLOUDFLARE_API_KEY")
+CLOUDFLARE_ACCOUNT_ID = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+
+# Pexels
+PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY")
+
 
 # ============================================================
-# NEWS SOURCES
+# SETTINGS
+# ============================================================
+
+CLOUDFLARE_IMAGE_MODEL = (
+    "@cf/black-forest-labs/flux-1-schnell"
+)
+
+MAX_TELEGRAM_LENGTH = 3900
+
+
+# ============================================================
+# NEWS RSS
 # ============================================================
 
 RSS_FEEDS = [
+
     "https://news.google.com/rss/search?q=finance+economy+markets&hl=en-US&gl=US&ceid=US:en",
+
     "https://news.google.com/rss/search?q=personal+finance+money&hl=en-US&gl=US&ceid=US:en",
+
     "https://news.google.com/rss/search?q=investing+stocks+economy&hl=en-US&gl=US&ceid=US:en",
+
     "https://news.google.com/rss/search?q=business+economy&hl=en-US&gl=US&ceid=US:en",
+
 ]
 
 
@@ -41,10 +65,16 @@ RSS_FEEDS = [
 # ============================================================
 
 def get_history():
+
     if not os.path.exists("history.txt"):
         return set()
 
-    with open("history.txt", "r", encoding="utf-8") as f:
+    with open(
+        "history.txt",
+        "r",
+        encoding="utf-8"
+    ) as f:
+
         return set(
             line.strip()
             for line in f
@@ -53,7 +83,7 @@ def get_history():
 
 
 # ============================================================
-# NEWS
+# GET NEWS
 # ============================================================
 
 def get_news():
@@ -61,13 +91,16 @@ def get_news():
     print("🌍 Scanning financial news...")
 
     history = get_history()
+
     entries = []
 
     for rss_url in RSS_FEEDS:
 
         try:
 
-            feed = feedparser.parse(rss_url)
+            feed = feedparser.parse(
+                rss_url
+            )
 
             for entry in feed.entries:
 
@@ -77,17 +110,26 @@ def get_news():
                     ""
                 )
 
-                if link and link not in history:
+                if (
+                    link
+                    and link not in history
+                ):
 
-                    entries.append(entry)
+                    entries.append(
+                        entry
+                    )
 
         except Exception as e:
 
-            print(f"⚠️ RSS Error: {e}")
+            print(
+                f"⚠️ RSS error: {e}"
+            )
 
     if not entries:
 
-        print("ℹ️ No new news found.")
+        print(
+            "ℹ️ No new news found."
+        )
 
         return None
 
@@ -97,9 +139,10 @@ def get_news():
 
         unique[entry.link] = entry
 
-    entries = list(unique.values())
+    entries = list(
+        unique.values()
+    )
 
-    # Берём свежую новость
     entries.sort(
         key=lambda x:
         getattr(
@@ -163,11 +206,11 @@ def get_educational_topic():
 
         "как контролировать импульсивные покупки",
 
-        "как правильно планировать крупные покупки",
+        "как планировать крупные покупки",
 
         "как создать несколько источников дохода",
 
-        "как повысить свою стоимость на рынке труда",
+        "как повысить свою ценность на рынке труда",
 
         "как попросить повышение зарплаты",
 
@@ -179,7 +222,9 @@ def get_educational_topic():
 
     ]
 
-    return random.choice(topics)
+    return random.choice(
+        topics
+    )
 
 
 # ============================================================
@@ -189,17 +234,34 @@ def get_educational_topic():
 def clean_text(text):
 
     if not text:
-
         return ""
 
-    # Убираем Markdown
-    text = text.replace("**", "")
-    text = text.replace("__", "")
-    text = text.replace("```", "")
-    text = text.replace("`", "")
-    text = text.replace("~~", "")
+    text = text.replace(
+        "**",
+        ""
+    )
 
-    # Убираем заголовки Markdown
+    text = text.replace(
+        "__",
+        ""
+    )
+
+    text = text.replace(
+        "```",
+        ""
+    )
+
+    text = text.replace(
+        "`",
+        ""
+    )
+
+    text = text.replace(
+        "~~",
+        ""
+    )
+
+    # Убираем Markdown-заголовки
     lines = []
 
     for line in text.splitlines():
@@ -212,9 +274,11 @@ def clean_text(text):
 
         lines.append(line)
 
-    text = "\n".join(lines)
+    text = "\n".join(
+        lines
+    )
 
-    # Убираем ссылки
+    # Убираем URL
     text = re.sub(
         r"https?://\S+",
         "",
@@ -232,44 +296,18 @@ def clean_text(text):
 
 
 # ============================================================
-# CHECK TELEGRAM TEXT
-# ============================================================
-
-def telegram_text_is_good(text):
-
-    if not text:
-
-        return False
-
-    text = text.strip()
-
-    # Слишком короткий текст
-    if len(text) < 250:
-
-        return False
-
-    # Если закончился на запятой/двоеточии/тире —
-    # скорее всего предложение не закончено
-    if text[-1] in ",:;—-(":
-
-        return False
-
-    return True
-
-
-# ============================================================
-# PARSE RESPONSE
+# AI RESPONSE PARSER
 # ============================================================
 
 def parse_ai_response(text):
 
     if not text:
-
         return None
 
-    text = clean_text(text)
+    text = clean_text(
+        text
+    )
 
-    # Ищем Telegram
     if "TELEGRAM:" in text:
 
         text = text.split(
@@ -277,7 +315,6 @@ def parse_ai_response(text):
             1
         )[1]
 
-    # Разделяем X
     if "X_POST:" in text:
 
         telegram_text, x_text = text.split(
@@ -309,10 +346,31 @@ def parse_ai_response(text):
 
 
 # ============================================================
+# TEXT CHECK
+# ============================================================
+
+def good_text(text):
+
+    if not text:
+        return False
+
+    if len(text) < 250:
+        return False
+
+    if text[-1] in ",:;—-(":
+        return False
+
+    return True
+
+
+# ============================================================
 # GROQ
 # ============================================================
 
-def ask_groq(client, prompt):
+def ask_groq(
+    client,
+    prompt
+):
 
     for attempt in range(1, 4):
 
@@ -328,12 +386,22 @@ def ask_groq(client, prompt):
 
                 messages=[
                     {
+                        "role": "system",
+                        "content": (
+                            "Ты профессиональный автор "
+                            "русскоязычного финансового "
+                            "Telegram-канала. "
+                            "Пиши живо, интересно "
+                            "и понятно."
+                        )
+                    },
+                    {
                         "role": "user",
                         "content": prompt
                     }
                 ],
 
-                temperature=0.5,
+                temperature=0.65,
 
                 max_completion_tokens=4096,
 
@@ -342,40 +410,26 @@ def ask_groq(client, prompt):
 
             if not completion.choices:
 
-                print(
-                    "⚠️ Groq returned no choices."
-                )
-
                 continue
 
-            choice = completion.choices[0]
+            choice = (
+                completion.choices[0]
+            )
 
-            finish_reason = choice.finish_reason
+            finish_reason = (
+                choice.finish_reason
+            )
 
             print(
                 f"📡 Groq finish reason: "
                 f"{finish_reason}"
             )
 
-            content = choice.message.content
-
-            # Иногда reasoning-модель может вернуть пустой content
-            if not content:
-
-                print(
-                    "⚠️ Groq content is empty."
-                )
-
-                continue
-
-            content = content.strip()
+            content = (
+                choice.message.content
+            )
 
             if not content:
-
-                print(
-                    "⚠️ Groq content is blank."
-                )
-
                 continue
 
             result = parse_ai_response(
@@ -383,39 +437,9 @@ def ask_groq(client, prompt):
             )
 
             if not result:
-
-                print(
-                    "⚠️ Could not parse Groq response."
-                )
-
                 continue
 
-            # Если модель нормально завершила ответ,
-            # принимаем его.
-            if finish_reason == "stop":
-
-                if telegram_text_is_good(
-                    result["telegram"]
-                ):
-
-                    print(
-                        "✅ Groq response accepted!"
-                    )
-
-                    return result
-
-            # Если ответ был обрезан,
-            # пробуем ещё раз.
-            if finish_reason == "length":
-
-                print(
-                    "⚠️ Groq response hit length limit."
-                )
-
-                continue
-
-            # На всякий случай принимаем хороший ответ
-            if telegram_text_is_good(
+            if good_text(
                 result["telegram"]
             ):
 
@@ -431,10 +455,6 @@ def ask_groq(client, prompt):
                 f"⚠️ Groq error: {e}"
             )
 
-    print(
-        "❌ Groq failed after 3 attempts."
-    )
-
     return None
 
 
@@ -442,11 +462,9 @@ def ask_groq(client, prompt):
 # GENERATE CONTENT
 # ============================================================
 
-def generate_content(news=None):
-
-    print(
-        "🤖 AI is analyzing with Groq..."
-    )
+def generate_content(
+    news=None
+):
 
     if not GROQ_API_KEY:
 
@@ -462,42 +480,54 @@ def generate_content(news=None):
             api_key=GROQ_API_KEY
         )
 
-        # ====================================================
+        # ----------------------------------------------------
         # NEWS
-        # ====================================================
+        # ----------------------------------------------------
 
         if news:
 
             prompt = f"""
-Ты пишешь пост для русского финансового Telegram-канала.
+Создай очень интересный пост для
+русскоязычного финансового Telegram-канала.
 
 НОВОСТЬ:
 
 {news.title}
 
-Задача:
+Пиши так, чтобы человек захотел дочитать
+публикацию до конца.
 
-Объясни эту новость обычному человеку.
+Используй много, но уместно, эмодзи.
 
-Telegram-пост должен содержать:
+СТРУКТУРА:
 
-📰 Заголовок
+🔥 ВАЖНОЕ ЗА СЕГОДНЯ
 
-3-5 коротких абзацев.
+Заголовок должен быть коротким
+и цепляющим.
 
-Объясни:
+📰 ЧТО ПРОИЗОШЛО
 
-Что произошло.
+Простыми словами объясни событие.
 
-Почему это важно.
+📊 ПОЧЕМУ ЭТО ВАЖНО
 
-Как это может повлиять на обычных людей.
+Объясни значение новости.
 
-Что из этого следует.
+👀 ЧТО ЭТО ЗНАЧИТ ДЛЯ ЛЮДЕЙ
 
-Можно использовать эмодзи.
+Объясни возможное влияние
+на обычного человека.
 
-Можно добавить лёгкий юмор.
+💡 ГЛАВНЫЙ ВЫВОД
+
+Дай короткий практический вывод.
+
+Используй дополнительные эмодзи:
+💰 📈 📉 💡 📊 👀 🎯 🚀 ⚠️ 🔥
+
+Не ставь эмодзи после каждого слова.
+Они должны улучшать внешний вид.
 
 Не выдумывай факты.
 
@@ -513,69 +543,75 @@ Telegram-пост должен содержать:
 
 Не используй обратные кавычки.
 
-Не используй символ # для заголовков.
+Пост должен быть полностью закончен.
 
-Пиши обычным текстом.
-
-Пост должен быть законченным.
-
-Не заканчивай предложение на середине.
-
-Объём Telegram-поста: примерно 120-250 слов.
+Объём примерно 150-250 слов.
 
 В самом конце:
 
-⚠️ Материал носит информационный характер и не является индивидуальной финансовой рекомендацией.
+⚠️ Материал носит информационный характер
+и не является индивидуальной финансовой рекомендацией.
 
-После Telegram напиши:
+После этого:
 
 X_POST:
 
-Короткий пост для X.
-
+Короткая версия новости для X.
 До 280 символов.
-
 Русский язык.
-
-Без Markdown.
-
-Можно использовать 1-2 хэштега.
+Можно использовать эмодзи.
+Без ссылок.
 """
 
-        # ====================================================
+        # ----------------------------------------------------
         # EDUCATIONAL
-        # ====================================================
+        # ----------------------------------------------------
 
         else:
 
-            topic = get_educational_topic()
+            topic = (
+                get_educational_topic()
+            )
 
             prompt = f"""
-Ты пишешь пост для современного русского финансового канала.
+Создай интересный образовательный пост
+для русского финансового Telegram-канала.
 
 ТЕМА:
 
 {topic}
 
-Создай полезный материал для обычного человека.
+Пост должен быть полезным,
+понятным и увлекательным.
 
-Telegram:
+СТРУКТУРА:
 
-🧠 Короткий заголовок
+💰 ЦЕПЛЯЮЩИЙ ЗАГОЛОВОК
 
-3-6 небольших абзацев.
+Начни с интересной мысли,
+вопроса или неожиданного факта.
+
+🧠 В ЧЁМ СУТЬ?
 
 Объясни тему простыми словами.
 
-Дай конкретные советы.
+📌 ЧТО МОЖНО СДЕЛАТЬ?
 
-Приведи простой пример.
+Дай конкретные действия.
 
-В конце сделай практический вывод.
+💡 ПРОСТОЙ ПРИМЕР
 
-Можно использовать эмодзи.
+Приведи понятный жизненный пример.
 
-Можно добавить лёгкий юмор.
+🚀 ГЛАВНАЯ МЫСЛЬ
+
+Сделай сильный итоговый вывод.
+
+Используй уместные эмодзи:
+
+💰 💡 📌 🧠 🚀 🎯 📈 📊 👀 ⚠️ 🔥
+
+Не ставь эмодзи после каждого предложения.
 
 Не обещай гарантированный заработок.
 
@@ -583,9 +619,11 @@ Telegram:
 
 Не придумывай статистику.
 
-Не давай персональных инвестиционных рекомендаций.
+Не давай персональных инвестиционных
+рекомендаций.
 
-Не советуй конкретно покупать или продавать активы.
+Не советуй конкретно покупать
+или продавать активы.
 
 Не добавляй ссылки.
 
@@ -599,33 +637,25 @@ Telegram:
 
 Не используй обратные кавычки.
 
-Не используй # для заголовков.
-
-Пиши обычным текстом.
-
 Пост должен быть полностью закончен.
 
-Не заканчивай предложение на середине.
+Объём примерно 150-250 слов.
 
-Объём Telegram-поста: примерно 120-250 слов.
+В конце:
 
-В самом конце:
+⚠️ Материал носит информационный
+и образовательный характер и не является
+индивидуальной финансовой рекомендацией.
 
-⚠️ Материал носит информационный и образовательный характер и не является индивидуальной финансовой рекомендацией.
-
-После Telegram:
+После этого:
 
 X_POST:
 
 Короткая полезная мысль для X.
-
 До 280 символов.
-
 Русский язык.
-
-Без Markdown.
-
-Можно использовать 1-2 хэштега.
+Можно использовать эмодзи.
+Без ссылок.
 """
 
         return ask_groq(
@@ -643,41 +673,442 @@ X_POST:
 
 
 # ============================================================
-# TELEGRAM
+# IMAGE PROMPT
 # ============================================================
 
-def send_telegram(text):
+def create_image_prompt(
+    news,
+    content
+):
 
-    if not TELEGRAM_BOT_TOKEN:
+    if news:
+
+        subject = news.title
+
+    else:
+
+        subject = content[
+            "telegram"
+        ][:800]
+
+    return f"""
+Create a professional editorial financial
+illustration for a Russian finance news channel.
+
+Topic:
+{subject}
+
+Style:
+
+modern financial magazine,
+professional editorial photography,
+realistic,
+cinematic lighting,
+clean composition,
+premium business aesthetic,
+financial markets,
+money and economy symbolism,
+no text,
+no letters,
+no logos,
+no watermark,
+no numbers,
+no readable signs.
+
+The image should look attractive
+as a Telegram channel cover image.
+"""
+
+
+# ============================================================
+# CLOUDFLARE AI IMAGE
+# ============================================================
+
+def generate_cloudflare_image(
+    prompt
+):
+
+    if not CLOUDFLARE_API_KEY:
 
         print(
-            "❌ TELEGRAM_BOT_TOKEN is missing!"
+            "⚠️ CLOUDFLARE_API_KEY missing."
         )
 
-        return False
+        return None
 
-    if not TELEGRAM_CHAT_ID:
+    if not CLOUDFLARE_ACCOUNT_ID:
 
         print(
-            "❌ TELEGRAM_CHAT_ID is missing!"
+            "⚠️ CLOUDFLARE_ACCOUNT_ID missing."
         )
 
-        return False
+        return None
+
+    print(
+        "🎨 Trying Cloudflare FLUX..."
+    )
+
+    url = (
+        "https://api.cloudflare.com/client/v4/"
+        f"accounts/{CLOUDFLARE_ACCOUNT_ID}"
+        "/ai/run/"
+        "@cf/black-forest-labs/flux-1-schnell"
+    )
 
     try:
 
-        url = (
-            "https://api.telegram.org/"
-            f"bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        response = requests.post(
+
+            url,
+
+            headers={
+                "Authorization":
+                    f"Bearer {CLOUDFLARE_API_KEY}",
+
+                "Content-Type":
+                    "application/json"
+            },
+
+            json={
+                "prompt": prompt,
+                "steps": 4
+            },
+
+            timeout=120
         )
+
+        if response.status_code != 200:
+
+            print(
+                "⚠️ Cloudflare image error:"
+                f" {response.status_code}"
+            )
+
+            print(
+                response.text[:500]
+            )
+
+            return None
+
+        data = response.json()
+
+        result = data.get(
+            "result"
+        )
+
+        if not result:
+
+            print(
+                "⚠️ Cloudflare returned "
+                "no result."
+            )
+
+            return None
+
+        image_base64 = result.get(
+            "image"
+        )
+
+        if not image_base64:
+
+            print(
+                "⚠️ Cloudflare returned "
+                "no image."
+            )
+
+            return None
+
+        image_bytes = base64.b64decode(
+            image_base64
+        )
+
+        filename = "generated_image.jpg"
+
+        with open(
+            filename,
+            "wb"
+        ) as f:
+
+            f.write(
+                image_bytes
+            )
+
+        print(
+            "✅ Cloudflare image generated!"
+        )
+
+        return filename
+
+    except Exception as e:
+
+        print(
+            f"⚠️ Cloudflare image error: {e}"
+        )
+
+        return None
+
+
+# ============================================================
+# PEXELS SEARCH
+# ============================================================
+
+def get_pexels_query(
+    news,
+    content
+):
+
+    text = (
+        news.title
+        if news
+        else content["telegram"]
+    )
+
+    text = text.lower()
+
+    keywords = {
+
+        "inflation": "inflation economy",
+
+        "economy": "economy business",
+
+        "market": "stock market",
+
+        "stocks": "stock market",
+
+        "bank": "bank finance",
+
+        "banks": "bank finance",
+
+        "money": "money finance",
+
+        "investment": "investment finance",
+
+        "investing": "investment finance",
+
+        "bitcoin": "bitcoin cryptocurrency",
+
+        "crypto": "cryptocurrency",
+
+        "dollar": "dollar money",
+
+        "euro": "euro money",
+
+        "salary": "salary work",
+
+        "income": "business income",
+
+        "business": "business office",
+
+        "job": "career business",
+
+        "ai": "artificial intelligence technology",
+
+    }
+
+    for word, query in keywords.items():
+
+        if word in text:
+
+            return query
+
+    return "finance business money"
+
+
+# ============================================================
+# PEXELS IMAGE
+# ============================================================
+
+def get_pexels_image(
+    news,
+    content
+):
+
+    if not PEXELS_API_KEY:
+
+        print(
+            "⚠️ PEXELS_API_KEY missing."
+        )
+
+        return None
+
+    query = get_pexels_query(
+        news,
+        content
+    )
+
+    print(
+        f"📸 Searching Pexels: {query}"
+    )
+
+    url = (
+        "https://api.pexels.com/v1/search"
+    )
+
+    try:
+
+        response = requests.get(
+
+            url,
+
+            headers={
+                "Authorization":
+                    PEXELS_API_KEY
+            },
+
+            params={
+                "query": query,
+                "per_page": 10,
+                "orientation": "portrait"
+            },
+
+            timeout=30
+        )
+
+        if response.status_code != 200:
+
+            print(
+                "⚠️ Pexels error:"
+                f" {response.status_code}"
+            )
+
+            return None
+
+        data = response.json()
+
+        photos = data.get(
+            "photos",
+            []
+        )
+
+        if not photos:
+
+            print(
+                "⚠️ Pexels found no photos."
+            )
+
+            return None
+
+        # Берём случайное из первых результатов
+        photo = random.choice(
+            photos[:5]
+        )
+
+        image_url = (
+            photo
+            .get("src", {})
+            .get("large2x")
+        )
+
+        if not image_url:
+
+            return None
+
+        image_response = requests.get(
+            image_url,
+            timeout=60
+        )
+
+        image_response.raise_for_status()
+
+        filename = "pexels_image.jpg"
+
+        with open(
+            filename,
+            "wb"
+        ) as f:
+
+            f.write(
+                image_response.content
+            )
+
+        print(
+            "✅ Pexels image downloaded!"
+        )
+
+        return filename
+
+    except Exception as e:
+
+        print(
+            f"⚠️ Pexels error: {e}"
+        )
+
+        return None
+
+
+# ============================================================
+# GET IMAGE
+# ============================================================
+
+def get_image(
+    news,
+    content
+):
+
+    prompt = create_image_prompt(
+        news,
+        content
+    )
+
+    # First: AI
+    image = generate_cloudflare_image(
+        prompt
+    )
+
+    if image:
+
+        return image
+
+    # Backup: Pexels
+    print(
+        "🔄 AI image failed. "
+        "Trying Pexels..."
+    )
+
+    image = get_pexels_image(
+        news,
+        content
+    )
+
+    if image:
+
+        return image
+
+    print(
+        "⚠️ No image available."
+    )
+
+    return None
+
+
+# ============================================================
+# TELEGRAM TEXT
+# ============================================================
+
+def send_telegram_text(
+    text
+):
+
+    if not TELEGRAM_BOT_TOKEN:
+        return False
+
+    url = (
+        "https://api.telegram.org/"
+        f"bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    )
+
+    try:
 
         response = requests.post(
 
             url,
 
             data={
-                "chat_id": TELEGRAM_CHAT_ID,
-                "text": text
+                "chat_id":
+                    TELEGRAM_CHAT_ID,
+
+                "text":
+                    text
             },
 
             timeout=30
@@ -685,8 +1116,65 @@ def send_telegram(text):
 
         response.raise_for_status()
 
+        return True
+
+    except Exception as e:
+
         print(
-            "✅ Sent to Telegram!"
+            f"❌ Telegram text error: {e}"
+        )
+
+        return False
+
+
+# ============================================================
+# TELEGRAM PHOTO
+# ============================================================
+
+def send_telegram_photo(
+    image_path,
+    text
+):
+
+    if not TELEGRAM_BOT_TOKEN:
+        return False
+
+    url = (
+        "https://api.telegram.org/"
+        f"bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+    )
+
+    try:
+
+        with open(
+            image_path,
+            "rb"
+        ) as photo:
+
+            response = requests.post(
+
+                url,
+
+                data={
+                    "chat_id":
+                        TELEGRAM_CHAT_ID,
+
+                    "caption":
+                        text
+                },
+
+                files={
+                    "photo":
+                        photo
+                },
+
+                timeout=90
+            )
+
+        response.raise_for_status()
+
+        print(
+            "✅ Telegram photo sent!"
         )
 
         return True
@@ -694,17 +1182,60 @@ def send_telegram(text):
     except Exception as e:
 
         print(
-            f"❌ Telegram Error: {e}"
+            f"⚠️ Telegram photo error: {e}"
         )
 
         return False
 
 
 # ============================================================
+# TELEGRAM
+# ============================================================
+
+def send_telegram(
+    text,
+    image_path=None
+):
+
+    # Telegram caption has a lower limit
+    # than a normal message.
+    if image_path and len(text) <= 1024:
+
+        success = send_telegram_photo(
+            image_path,
+            text
+        )
+
+        if success:
+            return True
+
+    # If caption is too long or photo failed,
+    # send photo separately and then text.
+    if image_path:
+
+        photo_sent = send_telegram_photo(
+            image_path,
+            "🖼️"
+        )
+
+        if photo_sent:
+
+            return send_telegram_text(
+                text
+            )
+
+    return send_telegram_text(
+        text
+    )
+
+
+# ============================================================
 # X
 # ============================================================
 
-def post_to_x(text):
+def post_to_x(
+    text
+):
 
     if not all([
         X_API_KEY,
@@ -714,8 +1245,7 @@ def post_to_x(text):
     ]):
 
         print(
-            "⚠️ X API credentials are not configured. "
-            "Skipping X."
+            "⚠️ X credentials missing."
         )
 
         return
@@ -751,7 +1281,7 @@ def post_to_x(text):
     except Exception as e:
 
         print(
-            f"❌ X Error: {e}"
+            f"❌ X error: {e}"
         )
 
 
@@ -767,7 +1297,7 @@ if __name__ == "__main__":
 
     news = get_news()
 
-    # 50/50
+    # 50/50 NEWS / EDUCATIONAL
     use_news = (
         news is not None
         and random.random() < 0.5
@@ -799,19 +1329,38 @@ if __name__ == "__main__":
 
         raise SystemExit(1)
 
-    # Telegram
-    telegram_success = send_telegram(
-        content["telegram"]
+    # --------------------------------------------------------
+    # IMAGE
+    # --------------------------------------------------------
+
+    image_path = get_image(
+        news if use_news else None,
+        content
     )
 
+    # --------------------------------------------------------
+    # TELEGRAM
+    # --------------------------------------------------------
+
+    telegram_success = send_telegram(
+        content["telegram"],
+        image_path
+    )
+
+    # --------------------------------------------------------
     # X
+    # --------------------------------------------------------
+
     if content["x"]:
 
         post_to_x(
             content["x"]
         )
 
-    # Save news only after successful Telegram delivery
+    # --------------------------------------------------------
+    # HISTORY
+    # --------------------------------------------------------
+
     if telegram_success and use_news:
 
         with open(
