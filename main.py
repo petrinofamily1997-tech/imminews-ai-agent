@@ -1215,7 +1215,7 @@ def send_telegram(
 
         photo_sent = send_telegram_photo(
             image_path,
-            "🖼️"
+            ""
         )
 
         if photo_sent:
