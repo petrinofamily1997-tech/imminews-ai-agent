@@ -1,4 +1,5 @@
 import os
+import random
 import feedparser
 import requests
 import tweepy
@@ -23,42 +24,122 @@ X_ACCESS_SECRET = os.environ.get("X_ACCESS_SECRET")
 
 
 # =========================
+# NEWS SOURCES
+# =========================
+
+RSS_FEEDS = [
+    "https://news.google.com/rss/search?q=finance+economy+markets&hl=en-US&gl=US&ceid=US:en",
+    "https://news.google.com/rss/search?q=personal+finance+money&hl=en-US&gl=US&ceid=US:en",
+    "https://news.google.com/rss/search?q=investing+stocks+economy&hl=en-US&gl=US&ceid=US:en",
+]
+
+
+# =========================
+# CONTENT TYPES
+# =========================
+
+CONTENT_TYPES = [
+    "news",
+    "news",
+    "money",
+    "investing",
+    "income",
+    "money",
+    "news",
+    "investing",
+]
+
+
+# =========================
+# GET HISTORY
+# =========================
+
+def get_history():
+    if os.path.exists("history.txt"):
+        with open("history.txt", "r", encoding="utf-8") as f:
+            return f.read().splitlines()
+
+    return []
+
+
+# =========================
 # GET NEWS
 # =========================
 
 def get_news():
-    print("🌍 Scanning News...")
+    print("🌍 Scanning financial news...")
 
-    rss_url = (
-        "https://news.google.com/rss/search?"
-        "q=schengen+visa+rules+2026"
-        "&hl=en-US"
-        "&gl=US"
-        "&ceid=US:en"
-    )
+    history = get_history()
 
-    feed = feedparser.parse(rss_url)
+    all_entries = []
 
-    if os.path.exists("history.txt"):
-        with open("history.txt", "r", encoding="utf-8") as f:
-            history = f.read().splitlines()
-    else:
-        history = []
+    for rss_url in RSS_FEEDS:
+        try:
+            feed = feedparser.parse(rss_url)
 
-    for entry in feed.entries:
-        if entry.link not in history:
-            print(f"📰 Found news: {entry.title}")
-            return entry
+            for entry in feed.entries:
+                if entry.link not in history:
+                    all_entries.append(entry)
 
-    print("ℹ️ No new news found.")
-    return None
+        except Exception as e:
+            print(f"⚠️ RSS Error: {e}")
+
+    if not all_entries:
+        print("ℹ️ No new news found.")
+        return None
+
+    # Remove duplicates
+    unique_entries = {}
+
+    for entry in all_entries:
+        unique_entries[entry.link] = entry
+
+    all_entries = list(unique_entries.values())
+
+    # Pick a random fresh news item
+    news = random.choice(all_entries)
+
+    print(f"📰 Found: {news.title}")
+
+    return news
 
 
 # =========================
-# AI GENERATION
+# GENERATE EDUCATIONAL TOPIC
 # =========================
 
-def generate_content(news_entry):
+def generate_educational_topic():
+    topics = [
+        "how to manage personal money",
+        "how to save money",
+        "how to build an emergency fund",
+        "how to avoid unnecessary debt",
+        "how to increase income",
+        "how to make money online realistically",
+        "skills that can increase income",
+        "how artificial intelligence can help people earn money",
+        "how to start investing responsibly",
+        "what diversification means",
+        "what compound interest means",
+        "how inflation affects ordinary people",
+        "common financial mistakes",
+        "how to create a personal budget",
+        "how to control impulsive spending",
+        "how to evaluate financial risks",
+        "how to develop better money habits",
+        "how to turn a skill into additional income",
+        "how to negotiate a higher salary",
+        "how to create additional sources of income",
+    ]
+
+    return random.choice(topics)
+
+
+# =========================
+# GENERATE AI CONTENT
+# =========================
+
+def generate_content(news_entry=None):
     print("🤖 AI is analyzing with Groq...")
 
     if not GROQ_API_KEY:
@@ -68,47 +149,144 @@ def generate_content(news_entry):
     try:
         client = Groq(api_key=GROQ_API_KEY)
 
-        prompt = f"""
-You are a professional immigration news editor.
+        content_type = random.choice(CONTENT_TYPES)
 
-Analyze the following news:
+        # -------------------------
+        # NEWS
+        # -------------------------
 
-TITLE:
+        if content_type == "news" and news_entry:
+
+            prompt = f"""
+Ты — профессиональный русскоязычный редактор финансового Telegram-канала.
+
+Твоя задача — объяснить финансовую новость обычному человеку простым языком.
+
+Новость:
+
+ЗАГОЛОВОК:
 {news_entry.title}
 
-SOURCE:
+ССЫЛКА:
 {news_entry.link}
 
-Create content for two platforms.
+Напиши:
 
-IMPORTANT:
-- Write in English.
-- Do not invent facts.
-- Do not add information that is not supported by the news title.
-- Keep the information clear and useful.
-- Use emojis for Telegram.
-- Make the X post short and engaging.
-- Include relevant hashtags in the X post.
+1. TELEGRAM — подробный пост на русском языке.
+2. X_POST — короткий пост на русском языке.
 
-Return EXACTLY this format:
+Для Telegram:
+- 3-6 небольших абзацев.
+- Используй подходящие эмодзи.
+- Объясни, что произошло.
+- Объясни, почему это важно.
+- Объясни возможное влияние на обычных людей.
+- Добавь небольшой практический вывод.
+- Можно добавить лёгкую шутку или иронию.
+- Не выдумывай факты.
+- Не выдавай предположения за факты.
+
+Для X:
+- Коротко.
+- Интересно.
+- Русский язык.
+- 1-2 подходящих хэштега.
+- Не используй кликбейт без причины.
+
+В конце Telegram добавь:
+
+⚠️ Материал носит информационный характер и не является индивидуальной финансовой рекомендацией.
+
+Формат ответа должен быть строго:
 
 TELEGRAM:
-[2-4 sentence English summary with relevant emojis]
+текст
 
 X_POST:
-[Short English post with relevant hashtags]
+текст
+"""
+
+        # -------------------------
+        # EDUCATION / MONEY / INCOME
+        # -------------------------
+
+        else:
+
+            topic = generate_educational_topic()
+
+            prompt = f"""
+Ты — автор современного русскоязычного финансового канала.
+
+Тема:
+{topic}
+
+Создай полезный образовательный материал для обычного человека.
+
+Основные направления:
+- личные финансы;
+- управление деньгами;
+- инвестиционная грамотность;
+- способы увеличения дохода;
+- дополнительные источники дохода;
+- финансовые привычки;
+- предпринимательство;
+- работа и навыки;
+- использование ИИ для повышения продуктивности и дохода.
+
+ВАЖНЫЕ ПРАВИЛА:
+
+- Только русский язык.
+- Объясняй простыми словами.
+- Не обещай гарантированный заработок.
+- Не говори, что человек гарантированно заработает деньги.
+- Не рекламируй сомнительные схемы.
+- Не придумывай статистику.
+- Не выдавай инвестиционные предположения за факты.
+- Не советуй конкретно покупать или продавать активы.
+- Лёгкий юмор разрешён.
+- Стиль должен быть современным и живым.
+
+Для Telegram:
+- 4-7 небольших абзацев.
+- Эмодзи.
+- Конкретные советы.
+- В конце небольшой практический вывод.
+
+Для X:
+- Короткая полезная мысль.
+- Русский язык.
+- 1-2 хэштега.
+
+В конце Telegram добавь:
+
+⚠️ Материал носит информационный и образовательный характер и не является индивидуальной финансовой рекомендацией.
+
+Формат ответа строго:
+
+TELEGRAM:
+текст
+
+X_POST:
+текст
 """
 
         completion = client.chat.completions.create(
             model="openai/gpt-oss-20b",
             messages=[
                 {
+                    "role": "system",
+                    "content": (
+                        "Ты пишешь качественный русскоязычный "
+                        "финансово-образовательный контент."
+                    )
+                },
+                {
                     "role": "user",
                     "content": prompt
                 }
             ],
-            temperature=0.3,
-            max_tokens=500
+            temperature=0.5,
+            max_tokens=800
         )
 
         text = completion.choices[0].message.content
@@ -143,6 +321,7 @@ X_POST:
 # =========================
 
 def post_to_x(tweet_text):
+
     if not all([
         X_API_KEY,
         X_API_SECRET,
@@ -160,6 +339,10 @@ def post_to_x(tweet_text):
             access_token_secret=X_ACCESS_SECRET
         )
 
+        # X has a character limit
+        if len(tweet_text) > 280:
+            tweet_text = tweet_text[:277] + "..."
+
         client_x.create_tweet(text=tweet_text)
 
         print("✅ Posted to X!")
@@ -169,10 +352,11 @@ def post_to_x(tweet_text):
 
 
 # =========================
-# SEND TO TELEGRAM
+# SEND TELEGRAM
 # =========================
 
 def send_telegram(text, link):
+
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("❌ Telegram credentials are not configured!")
         return
@@ -206,29 +390,44 @@ def send_telegram(text, link):
 
 if __name__ == "__main__":
 
+    print("🚀 Financial Bot started!")
+
     news = get_news()
 
-    if news:
+    # 50/50:
+    # If there is news, sometimes use it.
+    # Otherwise generate educational content.
 
+    if random.random() < 0.5 and news:
         ai_content = generate_content(news)
-
-        if ai_content:
-
-            # Telegram
-            send_telegram(
-                ai_content["telegram"],
-                news.link
-            )
-
-            # X
-            if ai_content["x"]:
-                post_to_x(ai_content["x"])
-
-            # Save processed news
-            with open("history.txt", "a", encoding="utf-8") as f:
-                f.write(news.link + "\n")
-
-            print("✅ News processed successfully!")
+        history_link = news.link
 
     else:
-        print("ℹ️ Nothing to process.")
+        ai_content = generate_content(None)
+
+        if news:
+            history_link = news.link
+        else:
+            history_link = None
+
+    if ai_content:
+
+        # Telegram
+        send_telegram(
+            ai_content["telegram"],
+            history_link if history_link else "Financial education"
+        )
+
+        # X
+        if ai_content["x"]:
+            post_to_x(ai_content["x"])
+
+        # Save news to history
+        if history_link:
+            with open("history.txt", "a", encoding="utf-8") as f:
+                f.write(history_link + "\n")
+
+        print("✅ Content processed successfully!")
+
+    else:
+        print("❌ Content generation failed.")
