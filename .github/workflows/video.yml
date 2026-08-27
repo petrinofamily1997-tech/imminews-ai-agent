@@ -8,6 +8,7 @@ name: Financial Video Bot
 
 jobs:
   create-video:
+
     runs-on: ubuntu-latest
 
     steps:
@@ -35,10 +36,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install groq requests python-dotenv
 
-      - name: Check project files
+      - name: Check project
         run: |
           echo "=============================="
-          echo "PROJECT FILES"
+          echo "PROJECT"
           echo "=============================="
 
           ls -la
@@ -59,19 +60,17 @@ jobs:
           echo "VIDEO BOT"
           echo "=============================="
 
-          ls -lh video_bot.py
+          test -f video_bot.py
+          echo "video_bot.py OK"
 
       - name: Run Video Bot
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          GROQ_MODEL: "llama-3.3-70b-versatile"
 
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
 
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-
-          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
 
         run: |
           python video_bot.py
@@ -79,29 +78,28 @@ jobs:
       - name: Check generated video
         if: success()
         run: |
+
           echo "=============================="
-          echo "GENERATED VIDEO"
+          echo "VIDEO"
           echo "=============================="
 
-          if [ -f "output/video.mp4" ]; then
-            ls -lh output/video.mp4
+          test -f output/video.mp4
 
-            echo ""
-            echo "Video information:"
-            ffprobe \
-              -v error \
-              -show_entries format=duration,size \
-              -show_entries stream=width,height,codec_name \
-              -of default=noprint_wrappers=1 \
-              output/video.mp4
-          else
-            echo "❌ output/video.mp4 was not created"
-            exit 1
-          fi
+          ls -lh output/video.mp4
 
-      - name: Upload video
+          ffprobe \
+            -v error \
+            -show_entries \
+            format=duration,size \
+            -show_entries \
+            stream=width,height,codec_name \
+            -of default=noprint_wrappers=1 \
+            output/video.mp4
+
+      - name: Upload video artifact
         if: success()
         uses: actions/upload-artifact@v4
+
         with:
           name: financial-video
           path: output/video.mp4
