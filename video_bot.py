@@ -10,12 +10,11 @@ import requests
 from dotenv import load_dotenv
 from groq import Groq
 
+load_dotenv()
 
 # ============================================================
 # CONFIG
 # ============================================================
-
-load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
@@ -31,28 +30,19 @@ OUTPUT_DIR = BASE_DIR / "output"
 AUDIO_FILE = WORK_DIR / "voice.mp3"
 FINAL_VIDEO = OUTPUT_DIR / "video.mp4"
 
-VIDEO_WIDTH = 1080
-VIDEO_HEIGHT = 1920
-
 MUSIC_VOLUME = 0.06
 
 MIN_VIDEO_SECONDS = 15
-MAX_VIDEO_SECONDS = 35
+MAX_VIDEO_SECONDS = 40
 
 
 # ============================================================
-# GROQ MODEL SETTINGS
+# CURRENT GROQ MODELS
 # ============================================================
 
-# Приоритет моделей.
-# Сначала пытаемся использовать более мощную.
-# Если модель недоступна — пробуем следующую.
-
-PREFERRED_MODELS = [
+GROQ_MODELS = [
     "openai/gpt-oss-120b",
     "openai/gpt-oss-20b",
-    "qwen/qwen3.8-27b",
-    "qwen/qwen3.6-27b",
 ]
 
 
@@ -71,31 +61,29 @@ def check_environment():
         "PEXELS_API_KEY": PEXELS_API_KEY,
     }
 
-    missing = []
-
-    for name, value in required.items():
-        if not value:
-            missing.append(name)
+    missing = [
+        name
+        for name, value in required.items()
+        if not value
+    ]
 
     if missing:
 
         print("❌ Missing secrets:")
 
-        for item in missing:
-            print(f"   - {item}")
+        for name in missing:
+            print(f"   - {name}")
 
         return False
 
     if not shutil.which("ffmpeg"):
 
         print("❌ FFmpeg is not installed.")
-
         return False
 
     if not shutil.which("ffprobe"):
 
         print("❌ FFprobe is not installed.")
-
         return False
 
     MUSIC_DIR.mkdir(
@@ -119,7 +107,7 @@ def check_environment():
 
 
 # ============================================================
-# CLEAN WORK
+# CLEAN
 # ============================================================
 
 def clean_work_directory():
@@ -133,11 +121,9 @@ def clean_work_directory():
             try:
 
                 if item.is_file():
-
                     item.unlink()
 
                 elif item.is_dir():
-
                     shutil.rmtree(item)
 
             except Exception as e:
@@ -150,111 +136,6 @@ def clean_work_directory():
         parents=True,
         exist_ok=True
     )
-
-
-# ============================================================
-# GET AVAILABLE GROQ MODELS
-# ============================================================
-
-def get_available_groq_models():
-
-    print("🔎 Checking available Groq models...")
-
-    url = "https://api.groq.com/openai/v1/models"
-
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    try:
-
-        response = requests.get(
-            url,
-            headers=headers,
-            timeout=30
-        )
-
-        response.raise_for_status()
-
-        data = response.json()
-
-        models = data.get("data", [])
-
-        model_ids = []
-
-        for model in models:
-
-            model_id = model.get("id")
-
-            if model_id:
-                model_ids.append(model_id)
-
-        print(
-            f"✅ Groq reports "
-            f"{len(model_ids)} available models."
-        )
-
-        return model_ids
-
-    except Exception as e:
-
-        print(
-            f"⚠️ Could not retrieve Groq models: {e}"
-        )
-
-        return []
-
-
-# ============================================================
-# SELECT GROQ MODEL
-# ============================================================
-
-def select_groq_models():
-
-    available = get_available_groq_models()
-
-    selected = []
-
-    # Сначала наши предпочтительные модели
-
-    for model in PREFERRED_MODELS:
-
-        if model in available:
-
-            selected.append(model)
-
-    # Если ничего не найдено,
-    # ищем текстовые instruct/chat модели.
-
-    if not selected:
-
-        for model in available:
-
-            model_lower = model.lower()
-
-            if any(
-                x in model_lower
-                for x in [
-                    "gpt-oss",
-                    "qwen",
-                    "llama"
-                ]
-            ):
-
-                selected.append(model)
-
-    # Убираем дубликаты
-
-    selected = list(dict.fromkeys(selected))
-
-    print("🧠 Models selected for fallback:")
-
-    for model in selected:
-
-        print(f"   → {model}")
-
-    return selected
 
 
 # ============================================================
@@ -294,124 +175,81 @@ def clean_text(text):
     return text.strip()
 
 
-def clean_search_query(text):
-
-    text = clean_text(text)
-
-    text = text.replace(",", " ")
-
-    words = text.split()
-
-    return " ".join(words[:6])
-
-
 # ============================================================
-# GENERATE SCRIPT
+# GROQ
 # ============================================================
 
 def generate_script():
 
     print("🧠 Asking Groq to create a script...")
 
-    models = select_groq_models()
-
-    if not models:
-
-        print(
-            "❌ No compatible Groq models found."
-        )
-
-        return None
-
-    styles = [
+    style = random.choice([
         "PROVOCATIVE",
-        "ANALYTICAL",
         "INTELLECTUAL",
         "DARK",
         "PHILOSOPHICAL",
-    ]
-
-    style = random.choice(styles)
+        "ANALYTICAL",
+    ])
 
     print(
         f"🎩 Selected style: {style}"
     )
 
+    client = Groq(
+        api_key=GROQ_API_KEY
+    )
+
     system_prompt = """
-Ты — сценарист коротких вирусных финансовых видео.
+Ты профессиональный сценарист коротких
+финансовых видео на русском языке.
 
-Пиши исключительно на русском языке.
+Создавай оригинальный образ рассказчика:
 
-Стиль рассказчика:
+умный,
+спокойный,
+холодный,
+уверенный,
+слегка провокационный,
+философский,
+с лёгким сарказмом.
 
-- умный;
-- холодный;
-- спокойный;
-- уверенный;
-- слегка провокационный;
-- философский;
-- иногда саркастичный;
-- без дешёвого кликбейта;
-- говорит прямо со зрителем.
+Не копируй конкретных персонажей,
+актеров, блогеров или их голоса.
 
-Создавай полностью оригинальный образ рассказчика.
+Темы:
 
-НЕ копируй конкретных персонажей,
-актёров, блогеров или их голоса.
-
-Не упоминай:
-Мориарти,
-Мистера Фримена,
-других персонажей или авторов.
-
-Видео должно ощущаться как монолог умного человека,
-который показывает зрителю то,
-что тот обычно не замечает.
-
-Тема:
-
-Финансы.
-Деньги.
-Привычки.
-Инвестиции.
-Заработок.
-Психология денег.
-Расходы.
-Инфляция.
-Банки.
-Финансовые ошибки.
-Богатство.
-Личные финансы.
+деньги,
+финансовые ошибки,
+заработок,
+инвестиции,
+экономика,
+банки,
+инфляция,
+психология денег,
+богатство,
+расходы,
+финансовая грамотность.
 
 Структура:
 
-HOOK
-↓
-ИНТРИГА
-↓
-ФАКТ / ИДЕЯ
-↓
-НЕОЖИДАННЫЙ ВЫВОД
-↓
-МЯГКИЙ CTA
+1. Очень сильный HOOK.
+2. Интрига.
+3. Неочевидный факт или идея.
+4. Неожиданный вывод.
+5. Мягкий призыв подписаться.
 
-Первые слова должны заставлять
-человека перестать листать видео.
-
-Не начинай:
-
+Не начинай словами:
 "Сегодня мы поговорим..."
 "В этом видео..."
 "Привет всем..."
 
-Не используй:
+Не используй Markdown.
 
-Markdown.
-**
-Ссылки.
-URL.
-Хэштеги.
-Служебные комментарии.
+Не используй **.
+
+Не используй URL.
+
+Не используй хэштеги.
 
 Не используй эмодзи внутри сценария.
 
@@ -419,52 +257,41 @@ URL.
 
 Не давай персональных инвестиционных рекомендаций.
 
-Длина:
-80–130 слов.
+Длина сценария:
+примерно 100–150 слов.
 
-Верни ТОЛЬКО JSON.
-
-Формат:
+Ответ должен быть только JSON:
 
 {
-    "title": "...",
-    "style": "...",
-    "script": "...",
-    "pexels_queries": [
-        "...",
-        "...",
-        "..."
-    ]
+  "title": "...",
+  "script": "...",
+  "pexels_queries": [
+    "...",
+    "...",
+    "..."
+  ]
 }
 """
 
     user_prompt = f"""
-Создай сценарий одного короткого видео.
+Создай сценарий финансового видео.
 
 Стиль:
 {style}
 
-Нужна необычная финансовая тема,
-которая вызывает желание досмотреть ролик.
+Видео должно быть интересным,
+необычным и удерживать внимание.
 
-Сделай текст естественным для озвучки.
+Тема должна заставлять зрителя
+задуматься о собственных деньгах.
 
-Не перегружай фактами.
+Сделай текст естественным
+для мужской глубокой озвучки.
 
-Главное:
-интерес,
-напряжение,
-любопытство,
-сильный финальный вывод.
-
-Верни только JSON.
+Ответь только JSON.
 """
 
-    client = Groq(
-        api_key=GROQ_API_KEY
-    )
-
-    for model in models:
+    for model in GROQ_MODELS:
 
         print()
         print(
@@ -488,7 +315,7 @@ URL.
                     }
                 ],
 
-                temperature=0.85,
+                temperature=0.8,
 
                 max_tokens=1200,
 
@@ -497,21 +324,23 @@ URL.
                 }
             )
 
-            text = (
-                response.choices[0]
-                .message.content
+            content = (
+                response
+                .choices[0]
+                .message
+                .content
                 or ""
             )
 
-            if not text.strip():
+            if not content.strip():
 
                 print(
-                    "⚠️ Empty response."
+                    "⚠️ Empty Groq response."
                 )
 
                 continue
 
-            data = json.loads(text)
+            data = json.loads(content)
 
             script = clean_text(
                 data.get("script", "")
@@ -519,13 +348,6 @@ URL.
 
             title = clean_text(
                 data.get("title", "")
-            )
-
-            generated_style = clean_text(
-                data.get(
-                    "style",
-                    style
-                )
             )
 
             queries = data.get(
@@ -537,11 +359,10 @@ URL.
                 queries,
                 list
             ):
-
                 queries = []
 
             queries = [
-                clean_search_query(q)
+                clean_text(q)
                 for q in queries
                 if str(q).strip()
             ]
@@ -563,10 +384,6 @@ URL.
                 f"📝 Title: {title}"
             )
 
-            print(
-                f"🎩 Style: {generated_style}"
-            )
-
             print()
             print("📜 SCRIPT:")
             print(script)
@@ -574,23 +391,20 @@ URL.
 
             return {
                 "title": title,
-                "style": generated_style,
                 "script": script,
                 "pexels_queries": queries[:5],
-                "model": model,
             }
 
         except Exception as e:
 
-            error_text = str(e)
-
             print(
-                f"⚠️ Model failed: {error_text[:500]}"
+                f"❌ Groq error with {model}:"
             )
 
-            continue
+            print(
+                str(e)[:1000]
+            )
 
-    print()
     print(
         "❌ All Groq models failed."
     )
@@ -641,13 +455,9 @@ def generate_voice(script):
     try:
 
         response = requests.post(
-
             url,
-
             headers=headers,
-
             json=payload,
-
             timeout=120
         )
 
@@ -660,14 +470,6 @@ def generate_voice(script):
 
             print(
                 response.text[:1000]
-            )
-
-            return False
-
-        if not response.content:
-
-            print(
-                "❌ Empty ElevenLabs response."
             )
 
             return False
@@ -711,58 +513,40 @@ def search_pexels_video(query):
     )
 
     headers = {
-        "Authorization":
-            PEXELS_API_KEY
+        "Authorization": PEXELS_API_KEY
     }
 
     params = {
 
         "query": query,
 
-        "orientation":
-            "portrait",
+        "orientation": "portrait",
 
-        "size":
-            "medium",
+        "size": "medium",
 
-        "per_page":
-            10,
+        "per_page": 10,
 
-        "locale":
-            "en-US",
+        "locale": "en-US",
     }
 
     try:
 
         response = requests.get(
-
             url,
-
             headers=headers,
-
             params=params,
-
             timeout=30
         )
 
         if response.status_code != 200:
-
-            print(
-                f"⚠️ Pexels error "
-                f"{response.status_code}"
-            )
-
             return None
 
-        data = response.json()
-
-        videos = data.get(
+        videos = response.json().get(
             "videos",
             []
         )
 
         if not videos:
-
             return None
 
         random.shuffle(videos)
@@ -775,14 +559,10 @@ def search_pexels_video(query):
             )
 
             portrait = [
-
-                f for f in files
-
-                if (
-                    f.get("width", 0)
-                    <
-                    f.get("height", 0)
-                )
+                f
+                for f in files
+                if f.get("width", 0)
+                < f.get("height", 0)
             ]
 
             candidates = (
@@ -793,16 +573,11 @@ def search_pexels_video(query):
                 continue
 
             candidates.sort(
-                key=lambda x:
-                    abs(
-                        (
-                            x.get(
-                                "width",
-                                0
-                            )
-                            or 0
-                        ) - 1080
-                    )
+                key=lambda f:
+                abs(
+                    f.get("width", 0)
+                    - 1080
+                )
             )
 
             link = candidates[0].get(
@@ -810,7 +585,6 @@ def search_pexels_video(query):
             )
 
             if link:
-
                 return link
 
         return None
@@ -833,11 +607,8 @@ def download_video(url, destination):
     try:
 
         response = requests.get(
-
             url,
-
             stream=True,
-
             timeout=120
         )
 
@@ -853,16 +624,9 @@ def download_video(url, destination):
             ):
 
                 if chunk:
+                    file.write(chunk)
 
-                    file.write(
-                        chunk
-                    )
-
-        if destination.stat().st_size < 10000:
-
-            return False
-
-        return True
+        return destination.exists()
 
     except Exception as e:
 
@@ -875,37 +639,22 @@ def download_video(url, destination):
 
 def get_video_clips(queries):
 
-    print(
-        "🎥 Searching for video footage..."
-    )
-
     fallback = [
-
         "money finance",
-
         "business",
-
         "banking",
-
         "stock market",
-
         "city night",
-
         "smartphone",
-
         "office",
-
         "person thinking",
     ]
 
     all_queries = (
-        queries +
-        fallback
+        queries + fallback
     )
 
     clips = []
-
-    used = set()
 
     for query in all_queries:
 
@@ -918,11 +667,6 @@ def get_video_clips(queries):
 
         if not link:
             continue
-
-        if link in used:
-            continue
-
-        used.add(link)
 
         destination = (
             WORK_DIR /
@@ -939,8 +683,7 @@ def get_video_clips(queries):
             )
 
     print(
-        f"✅ Downloaded "
-        f"{len(clips)} clips."
+        f"✅ Downloaded {len(clips)} clips."
     )
 
     return clips
@@ -976,37 +719,28 @@ def get_music():
 
 
 # ============================================================
-# DURATION
+# VIDEO HELPERS
 # ============================================================
 
 def get_duration(file):
 
     command = [
-
         "ffprobe",
-
         "-v",
         "error",
-
         "-show_entries",
         "format=duration",
-
         "-of",
         "default=noprint_wrappers=1:nokey=1",
-
-        str(file)
+        str(file),
     ]
 
     try:
 
         result = subprocess.run(
-
             command,
-
             capture_output=True,
-
             text=True,
-
             check=True
         )
 
@@ -1019,10 +753,6 @@ def get_duration(file):
         return 0
 
 
-# ============================================================
-# PREPARE CLIPS
-# ============================================================
-
 def prepare_clip(
     input_file,
     output_file,
@@ -1032,7 +762,6 @@ def prepare_clip(
     command = [
 
         "ffmpeg",
-
         "-y",
 
         "-stream_loop",
@@ -1045,7 +774,6 @@ def prepare_clip(
         str(duration),
 
         "-vf",
-
         (
             "scale=1080:1920:"
             "force_original_aspect_ratio=increase,"
@@ -1070,19 +798,15 @@ def prepare_clip(
         "-pix_fmt",
         "yuv420p",
 
-        str(output_file)
+        str(output_file),
     ]
 
     try:
 
         subprocess.run(
-
             command,
-
             stdout=subprocess.PIPE,
-
             stderr=subprocess.PIPE,
-
             check=True
         )
 
@@ -1121,13 +845,11 @@ def make_subtitles(
             current = []
 
     if current:
-
         chunks.append(
             " ".join(current)
         )
 
     if not chunks:
-
         return None
 
     subtitle_file = (
@@ -1172,9 +894,7 @@ def make_subtitles(
         encoding="utf-8"
     ) as file:
 
-        for i, chunk in enumerate(
-            chunks
-        ):
+        for i, chunk in enumerate(chunks):
 
             start = (
                 i *
@@ -1188,7 +908,7 @@ def make_subtitles(
             )
 
             file.write(
-                f"{i+1}\n"
+                f"{i + 1}\n"
             )
 
             file.write(
@@ -1208,7 +928,7 @@ def make_subtitles(
 
 
 # ============================================================
-# CREATE VIDEO
+# CREATE FINAL VIDEO
 # ============================================================
 
 def create_video(
@@ -1241,15 +961,6 @@ def create_video(
         )
     )
 
-    if voice_duration > MAX_VIDEO_SECONDS:
-
-        duration = voice_duration
-
-    print(
-        f"⏱️ Duration: "
-        f"{duration:.2f}s"
-    )
-
     prepared = []
 
     clip_duration = (
@@ -1257,9 +968,7 @@ def create_video(
         len(clips)
     )
 
-    for i, clip in enumerate(
-        clips
-    ):
+    for i, clip in enumerate(clips):
 
         output = (
             WORK_DIR /
@@ -1277,7 +986,6 @@ def create_video(
             )
 
     if not prepared:
-
         return False
 
     concat = (
@@ -1302,45 +1010,28 @@ def create_video(
         "merged.mp4"
     )
 
-    merge_command = [
-
-        "ffmpeg",
-
-        "-y",
-
-        "-f",
-        "concat",
-
-        "-safe",
-        "0",
-
-        "-i",
-        str(concat),
-
-        "-c",
-        "copy",
-
-        str(merged)
-    ]
-
     try:
 
         subprocess.run(
-
-            merge_command,
-
+            [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(concat),
+                "-c",
+                "copy",
+                str(merged),
+            ],
             stdout=subprocess.PIPE,
-
             stderr=subprocess.PIPE,
-
             check=True
         )
 
-    except Exception as e:
-
-        print(
-            f"❌ Merge error: {e}"
-        )
+    except:
 
         return False
 
@@ -1350,7 +1041,6 @@ def create_video(
     )
 
     if not subtitle_file:
-
         return False
 
     subtitle_path = (
@@ -1362,11 +1052,8 @@ def create_video(
     )
 
     video_filter = (
-
         f"subtitles='{subtitle_path}':"
-
         "force_style='"
-
         "FontName=Arial,"
         "FontSize=20,"
         "Bold=1,"
@@ -1377,7 +1064,6 @@ def create_video(
         "Shadow=1,"
         "Alignment=2,"
         "MarginV=420"
-
         "'"
     )
 
@@ -1386,7 +1072,6 @@ def create_video(
         command = [
 
             "ffmpeg",
-
             "-y",
 
             "-i",
@@ -1407,11 +1092,9 @@ def create_video(
                 "[1:a]"
                 "volume=1.0"
                 "[voice];"
-
                 "[2:a]"
                 f"volume={MUSIC_VOLUME}"
                 "[music];"
-
                 "[voice][music]"
                 "amix=inputs=2:"
                 "duration=first:"
@@ -1452,7 +1135,7 @@ def create_video(
             "-movflags",
             "+faststart",
 
-            str(FINAL_VIDEO)
+            str(FINAL_VIDEO),
         ]
 
     else:
@@ -1460,7 +1143,6 @@ def create_video(
         command = [
 
             "ffmpeg",
-
             "-y",
 
             "-i",
@@ -1502,7 +1184,7 @@ def create_video(
             "-movflags",
             "+faststart",
 
-            str(FINAL_VIDEO)
+            str(FINAL_VIDEO),
         ]
 
     print(
@@ -1511,31 +1193,25 @@ def create_video(
 
     try:
 
-        result = subprocess.run(
-
+        subprocess.run(
             command,
-
             stdout=subprocess.PIPE,
-
             stderr=subprocess.PIPE,
-
             check=True
         )
 
         if not FINAL_VIDEO.exists():
 
             print(
-                "❌ Video not created."
+                "❌ Video was not created."
             )
 
             return False
 
         size = (
             FINAL_VIDEO.stat().st_size
-            /
-            1024
-            /
-            1024
+            / 1024
+            / 1024
         )
 
         print(
@@ -1582,14 +1258,9 @@ def main():
     print()
 
     if not check_environment():
-
         return 1
 
     clean_work_directory()
-
-    # --------------------------------
-    # GROQ
-    # --------------------------------
 
     content = generate_script()
 
@@ -1601,10 +1272,6 @@ def main():
 
         return 1
 
-    # --------------------------------
-    # ELEVENLABS
-    # --------------------------------
-
     if not generate_voice(
         content["script"]
     ):
@@ -1614,10 +1281,6 @@ def main():
         )
 
         return 1
-
-    # --------------------------------
-    # PEXELS
-    # --------------------------------
 
     clips = get_video_clips(
         content["pexels_queries"]
@@ -1631,24 +1294,12 @@ def main():
 
         return 1
 
-    # --------------------------------
-    # MUSIC
-    # --------------------------------
-
     music = get_music()
 
-    # --------------------------------
-    # VIDEO
-    # --------------------------------
-
     if not create_video(
-
         clips,
-
         content["script"],
-
         music
-
     ):
 
         print(
@@ -1672,7 +1323,4 @@ def main():
 
 
 if __name__ == "__main__":
-
-    raise SystemExit(
-        main()
-    )
+    raise SystemExit(main())
