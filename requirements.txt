@@ -1,4 +1,6 @@
 groq
 requests
 python-dotenv
-gTTS
+omnivoice
+vane-search
+opencode-fixer
