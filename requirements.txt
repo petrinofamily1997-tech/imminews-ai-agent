@@ -1,4 +1,6 @@
-google-genai
-python-dotenv
-feedparser
+groq
 requests
+python-dotenv
+torch
+torchaudio
+chatterbox-tts
