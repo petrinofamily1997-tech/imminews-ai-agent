@@ -1,6 +1,3 @@
 groq
 requests
 python-dotenv
-omnivoice
-vane-search
-opencode-fixer
