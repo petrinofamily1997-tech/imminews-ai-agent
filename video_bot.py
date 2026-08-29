@@ -10,9 +10,7 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 from groq import Groq
-from chatterbox.mtl_tts import ChatterboxMultilingualTTS
-import torchaudio
-import torch
+from gtts import gTTS
 
 # ============================================================
 # ENV
@@ -22,6 +20,7 @@ load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
+
 
 # ============================================================
 # PATHS
@@ -39,6 +38,7 @@ PHOTO_FILE = ASSETS_DIR / "photo.png"
 
 TOPICS_HISTORY_FILE = BASE_DIR / "topics_history.json"
 
+
 # ============================================================
 # VIDEO SETTINGS
 # ============================================================
@@ -46,7 +46,6 @@ TOPICS_HISTORY_FILE = BASE_DIR / "topics_history.json"
 VIDEO_WIDTH = 1080
 VIDEO_HEIGHT = 1920
 FPS = 30
-
 MUSIC_VOLUME = 0.15
 
 MIN_CLIPS = 8
@@ -59,6 +58,7 @@ PHOTO_DURATION = 3.0
 
 TOPICS_HISTORY_SIZE = 15
 
+
 # ============================================================
 # GROQ MODELS
 # ============================================================
@@ -68,8 +68,9 @@ GROQ_MODELS = [
     "openai/gpt-oss-20b",
 ]
 
+
 # ============================================================
-# ТЕМЫ (финансовые и инвестиционные)
+# ТЕМЫ — ХАЙПОВЫЕ, ВИРАЛЬНЫЕ
 # ============================================================
 
 MONEY_TOPICS = [
@@ -95,8 +96,9 @@ MONEY_TOPICS = [
     "Почему криптозима — лучшее время для покупки",
 ]
 
+
 # ============================================================
-# RSS ЛЕНТЫ (новости из вашего проекта)
+# RSS ЛЕНТЫ
 # ============================================================
 
 FREE_NEWS_RSS = [
@@ -105,6 +107,7 @@ FREE_NEWS_RSS = [
     "https://news.google.com/rss/search?q=криптовалюта+биткоин+рынок&hl=ru&gl=RU&ceid=RU:ru",
     "https://news.google.com/rss/search?q=недвижимость+цены+инвестиции&hl=ru&gl=RU&ceid=RU:ru",
 ]
+
 
 # ============================================================
 # UTILS
@@ -121,6 +124,7 @@ def clean_text(text):
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
+
 def clean_tts_text(text):
     text = clean_text(text)
     text = re.sub(r"(?m)^[ \t]*[-–—•]\s*", "", text)
@@ -133,6 +137,7 @@ def clean_tts_text(text):
     text = re.sub(r"([,.!?;:]){2,}", r"\1", text)
     text = re.sub(r"[ \t]{2,}", " ", text)
     return text.strip()
+
 
 # ============================================================
 # ENVIRONMENT
@@ -172,6 +177,7 @@ def check_environment():
     print("✅ Environment OK")
     return True
 
+
 def clean_work_directory():
     print("🧹 Cleaning temporary files...")
     if WORK_DIR.exists():
@@ -184,6 +190,7 @@ def clean_work_directory():
             except Exception:
                 pass
     WORK_DIR.mkdir(parents=True, exist_ok=True)
+
 
 # ============================================================
 # NEWS AND TOPICS
@@ -221,6 +228,7 @@ def fetch_free_news_topic():
 
     return None
 
+
 def choose_topic():
     if random.random() < 0.45:
         news = fetch_free_news_topic()
@@ -255,6 +263,7 @@ def choose_topic():
     print(f"🎯 Selected topic: {topic}")
     return topic
 
+
 # ============================================================
 # SCRIPT GENERATION
 # ============================================================
@@ -269,6 +278,7 @@ def validate_cta(script):
     if not any(x in lower for x in telegram_variants):
         return False
     return True
+
 
 def parse_script_response(text):
     if not text:
@@ -320,6 +330,7 @@ def parse_script_response(text):
         "script": script,
         "pexels_queries": queries[:MAX_CLIPS]
     }
+
 
 def generate_script():
     print("🧠 Asking Groq to create a script...")
@@ -446,55 +457,44 @@ PEXELS:
     print("❌ All Groq models failed.")
     return None
 
+
 # ============================================================
-# CHATTERBOX TTS — БЕСПЛАТНАЯ ЗАМЕНА ELEVENLABS
+# gTTS — БЕСПЛАТНАЯ ОЗВУЧКА (РАБОТАЕТ В GITHUB ACTIONS)
 # ============================================================
 
 def generate_voice(script):
-    print("🎙️ Generating Russian voice with Chatterbox...")
+    print("🎙️ Generating voice with gTTS...")
 
     tts_script = clean_tts_text(script)
 
     try:
-        print("⏳ Loading Chatterbox model (first time may take a few minutes)...")
-        model = ChatterboxMultilingualTTS.from_pretrained(device="cpu")
+        tts = gTTS(text=tts_script, lang='ru', slow=False)
 
-        print("🔊 Generating speech...")
-        wav = model.generate(tts_script, language_id="ru")
+        temp_mp3 = WORK_DIR / "temp_voice.mp3"
+        tts.save(str(temp_mp3))
 
-        # Сохраняем как WAV
-        temp_wav = WORK_DIR / "temp_voice.wav"
-        torchaudio.save(str(temp_wav), wav, model.sr)
+        if not temp_mp3.exists():
+            print("❌ gTTS: File not created")
+            return False
 
-        # Конвертируем в MP3
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", str(temp_wav),
-            "-c:a", "libmp3lame",
-            "-b:a", "192k",
-            "-ar", "44100",
-            str(AUDIO_FILE)
-        ]
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-
-        # Удаляем временный WAV
-        temp_wav.unlink()
+        shutil.copy(temp_mp3, AUDIO_FILE)
+        temp_mp3.unlink()
 
         duration = get_duration(AUDIO_FILE)
         if duration <= 0:
-            print("❌ Invalid audio.")
+            print("❌ Invalid audio duration")
             return False
 
         print(f"✅ Voice generated: {duration:.2f}s")
         return True
 
     except Exception as e:
-        print(f"❌ Chatterbox error: {e}")
-        print("💡 Make sure you have installed: pip install chatterbox-tts torch torchaudio")
+        print(f"❌ gTTS error: {e}")
         return False
 
+
 # ============================================================
-# PEXELS — СКАЧИВАНИЕ КЛИПОВ
+# PEXELS
 # ============================================================
 
 def search_pexels_video(query):
@@ -532,6 +532,7 @@ def search_pexels_video(query):
         print(f"⚠️ Pexels exception: {e}")
         return None
 
+
 def download_video(url, destination):
     print(f"⬇️ Downloading {destination.name}")
     try:
@@ -545,6 +546,7 @@ def download_video(url, destination):
     except Exception as e:
         print(f"❌ Download error: {e}")
         return False
+
 
 def get_video_clips(queries):
     fallback = [
@@ -579,6 +581,7 @@ def get_video_clips(queries):
     print(f"✅ Downloaded {len(clips)} visual clips.")
     return clips
 
+
 # ============================================================
 # MUSIC
 # ============================================================
@@ -591,6 +594,7 @@ def get_music():
     track = random.choice(tracks)
     print(f"🎵 Music: {track.name}")
     return track
+
 
 # ============================================================
 # FFMPEG HELPERS
@@ -610,47 +614,18 @@ def get_duration(file):
     except Exception:
         return 0.0
 
-# ============================================================
-# HYPERFRAMES — СОЗДАНИЕ ВИДЕО
-# ============================================================
 
-def prepare_clip(input_file, output_file, duration):
-    command = [
-        "ffmpeg", "-y",
-        "-stream_loop", "-1",
-        "-i", str(input_file),
-        "-t", str(duration),
-        "-vf",
-        (
-            f"scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}:"
-            "force_original_aspect_ratio=increase,"
-            f"crop={VIDEO_WIDTH}:{VIDEO_HEIGHT},"
-            "setsar=1"
-        ),
-        "-an",
-        "-r", str(FPS),
-        "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-crf", "23",
-        "-pix_fmt", "yuv420p",
-        str(output_file)
-    ]
-    try:
-        subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-        return True
-    except subprocess.CalledProcessError as e:
-        print("❌ Clip preparation error:")
-        print(e.stderr[-2000:] if e.stderr else "")
-        return False
+# ============================================================
+# HYPERFRAMES
+# ============================================================
 
 def create_hyperframes_video(content, clips, voice_duration):
-    """Создает видео через HyperFrames"""
+    """Создаёт видео через HyperFrames"""
     print("📄 Generating HyperFrames HTML...")
 
     title = content["title"]
     script = content["script"]
 
-    # Разбиваем сценарий на предложения для субтитров
     sentences = re.split(r'[.!?]+\s*', script)
     sentences = [s.strip() for s in sentences if len(s.strip()) > 10]
 
@@ -669,7 +644,6 @@ def create_hyperframes_video(content, clips, voice_duration):
         ''')
         current_time += duration
 
-    # Создаем HTML
     html_content = f'''<!DOCTYPE html>
 <html>
 <head>
@@ -740,10 +714,6 @@ def create_hyperframes_video(content, clips, voice_duration):
       letter-spacing: 0.5px;
     }}
 
-    .subtitle.highlight {{
-      color: #FFD700;
-    }}
-
     .photo-ad {{
       position: absolute;
       top: 0;
@@ -783,7 +753,6 @@ def create_hyperframes_video(content, clips, voice_duration):
   <div id="stage" data-composition-id="finance-video" data-width="1080" data-height="1920" data-fps="30" data-duration="{total_duration:.2f}">
 '''
 
-    # Добавляем видео-клипы
     for i, clip_path in enumerate(clips[:MAX_CLIPS]):
         duration_per_clip = min(voice_duration / len(clips[:MAX_CLIPS]) * 1.5, 5.0)
         start_time = i * (voice_duration / len(clips[:MAX_CLIPS]))
@@ -791,22 +760,18 @@ def create_hyperframes_video(content, clips, voice_duration):
     <video class="clip-video" data-start="{start_time:.2f}" data-duration="{duration_per_clip:.2f}" data-track-index="{i}" src="{clip_path.name}" muted playsinline></video>
 '''
 
-    # Затемнение
     html_content += '''
     <div class="overlay"></div>
 '''
 
-    # Заголовок
     html_content += f'''
     <div class="title-text" id="main-title" data-start="0.3" data-duration="3.5">
         {title}
     </div>
 '''
 
-    # Субтитры
     html_content += ''.join(subtitles_html)
 
-    # Рекламное фото
     html_content += f'''
     <img class="photo-ad" id="ad-photo" data-start="{voice_duration + 0.5:.2f}" data-duration="{PHOTO_DURATION:.2f}" src="photo.png" />
     <div class="ad-text" id="ad-text" data-start="{voice_duration + 0.8:.2f}" data-duration="{PHOTO_DURATION - 0.5:.2f}">
@@ -815,7 +780,6 @@ def create_hyperframes_video(content, clips, voice_duration):
     </div>
 '''
 
-    # Аудио
     html_content += f'''
     <audio id="voiceover" data-start="0" data-duration="{voice_duration:.2f}" src="voiceover.mp3"></audio>
     <audio id="bg-music" data-start="0" data-duration="{total_duration:.2f}" data-volume="0.15" src="background.mp3" loop></audio>
@@ -826,7 +790,6 @@ def create_hyperframes_video(content, clips, voice_duration):
     window.addEventListener('load', () => {{
       const tl = gsap.timeline();
       
-      // Анимация заголовка
       tl.fromTo("#main-title",
         {{ opacity: 0, y: 40, scale: 0.95 }},
         {{ opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "power2.out" }},
@@ -837,7 +800,6 @@ def create_hyperframes_video(content, clips, voice_duration):
         3.8
       );
 
-      // Анимация субтитров
       const subtitles = document.querySelectorAll('.subtitle');
       subtitles.forEach((el, i) => {{
         const start = parseFloat(el.dataset.start);
@@ -855,7 +817,6 @@ def create_hyperframes_video(content, clips, voice_duration):
         }}
       }});
 
-      // Анимация рекламного фото
       const adPhoto = document.getElementById('ad-photo');
       const adText = document.getElementById('ad-text');
       
@@ -876,40 +837,21 @@ def create_hyperframes_video(content, clips, voice_duration):
 </html>
 '''
 
-    # Сохраняем HTML
     html_path = WORK_DIR / "video_composition.html"
     html_path.write_text(html_content, encoding="utf-8")
 
-    # Копируем файлы в рабочую директорию
     if PHOTO_FILE.exists():
         shutil.copy(PHOTO_FILE, WORK_DIR / "photo.png")
 
     shutil.copy(AUDIO_FILE, WORK_DIR / "voiceover.mp3")
 
-    # Копируем музыку
     music_file = get_music()
     if music_file and music_file.exists():
         shutil.copy(music_file, WORK_DIR / "background.mp3")
 
-    # Запускаем HyperFrames
     print("🎬 Rendering with HyperFrames...")
     os.chdir(WORK_DIR)
 
-    # Сначала пробуем preview для проверки
-    print("🔍 Previewing composition...")
-    try:
-        subprocess.run(
-            ["hyperframes", "preview", "video_composition.html"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=30,
-            check=False
-        )
-    except:
-        pass
-
-    # Рендерим видео
-    print("🎥 Rendering video...")
     try:
         subprocess.run(
             ["hyperframes", "render", "video_composition.html", "--output", "output.mp4"],
@@ -931,7 +873,6 @@ def create_hyperframes_video(content, clips, voice_duration):
 
     os.chdir(BASE_DIR)
 
-    # Копируем готовое видео
     output_video = WORK_DIR / "output.mp4"
     if output_video.exists():
         shutil.copy(output_video, FINAL_VIDEO)
@@ -940,6 +881,7 @@ def create_hyperframes_video(content, clips, voice_duration):
 
     print("❌ Video not created")
     return False
+
 
 # ============================================================
 # MAIN
@@ -957,27 +899,23 @@ def main():
 
     clean_work_directory()
 
-    # 1. Генерируем сценарий
     content = generate_script()
     if not content:
         print("❌ Content generation failed.")
         return 1
 
-    # 2. Генерируем голос (Chatterbox — бесплатно)
     if not generate_voice(content["script"]):
         print("❌ Voice generation failed.")
         return 1
 
     voice_duration = get_duration(AUDIO_FILE)
 
-    # 3. Скачиваем клипы
     clips = get_video_clips(content["pexels_queries"])
     if len(clips) < MIN_CLIPS:
         print(f"⚠️ Not enough clips. Required: {MIN_CLIPS}, Found: {len(clips)}")
         if not clips:
             return 1
 
-    # 4. Создаем видео через HyperFrames
     if not create_hyperframes_video(content, clips, voice_duration):
         print("❌ Video creation failed.")
         return 1
@@ -992,6 +930,7 @@ def main():
     print()
 
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
