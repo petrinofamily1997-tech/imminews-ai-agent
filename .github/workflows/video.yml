@@ -30,6 +30,7 @@ jobs:
         run: |
           cd yumcut
           npm install
+          npx prisma generate
           npm run build
       
       - name: Install FFmpeg
