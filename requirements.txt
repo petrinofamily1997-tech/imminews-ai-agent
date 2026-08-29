@@ -1,7 +1,4 @@
-gTTS
 groq
 requests
 python-dotenv
-torch
-torchaudio
-chatterbox-tts
+gTTS
