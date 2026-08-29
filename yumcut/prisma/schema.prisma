@@ -1,0 +1,1219 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                                      String                     @id @default(uuid()) @db.Char(36)
+  email                                   String                     @unique
+  name                                    String?
+  image                                   String?
+  emailVerified                           DateTime?
+  preferredLanguage                       String                     @default("en") @db.VarChar(8)
+  emailReplyBonusGrantedAt                DateTime?
+  emailReplyBonusSourceId                 String?                    @db.VarChar(191)
+  subscriptionWinbackBonusPending         Boolean                    @default(false)
+  subscriptionWinbackBonusPendingAt       DateTime?
+  subscriptionWinbackBonusGrantedAt       DateTime?
+  subscriptionWinbackBonusGrantedSourceId String?                    @db.VarChar(191)
+  createdAt                               DateTime                   @default(now())
+  tokenBalance                            Int                        @default(0)
+  isAdmin                                 Boolean                    @default(false)
+  isGuest                                 Boolean                    @default(false)
+  guestConvertedAt                        DateTime?
+  guestDeviceId                           String?                    @db.VarChar(191)
+  deleted                                 Boolean                    @default(false)
+  deletedAt                               DateTime?
+  deletionReason                          String?                    @db.VarChar(512)
+  deletionSource                          String?                    @db.VarChar(32)
+  settings                                UserSettings?
+  projects                                Project[]
+  userCharacters                          UserCharacter[]
+  accounts                                Account[]
+  sessions                                Session[]
+  tokenTransactions                       TokenTransaction[]
+  telegramAccount                         TelegramAccount?
+  telegramLinkTokens                      TelegramLinkToken[]
+  characterImageTasks                     UserCharacterImageTask[]
+  // Template ownerships
+  templates                               Template[]
+  templateArtStyles                       TemplateArtStyle[]
+  templateVoiceStyles                     TemplateVoiceStyle[]
+  templateMusic                           TemplateMusic[]
+  // Project groups owned by the user
+  projectGroups                           ProjectGroup[]
+  mobileSessions                          MobileSession[]
+  publishChannels                         PublishChannel[]
+  publishChannelLanguages                 PublishChannelLanguage[]
+  publishChannelOAuthStates               PublishChannelOAuthState[] @relation("UserPublishChannelOAuthStates")
+  publishTasks                            PublishTask[]
+  plannedEmails                           PlannedEmail[]
+  subscriptionPurchases                   SubscriptionPurchase[]
+  tokenTopUpPurchases                     TokenTopUpPurchase[]
+  guestProfile                            GuestProfile?
+  favoriteCharacters                      UserFavoriteCharacter[]
+  attribution                             UserAttribution?
+  projectCreationAttempts                 ProjectCreationAttempt[]
+  userApiKeys                             UserApiKey[]
+  createdAdminApiKeys                     AdminApiKey[]             @relation("AdminApiKeysCreated")
+  revokedAdminApiKeys                     AdminApiKey[]             @relation("AdminApiKeysRevoked")
+  inboundFeedbacks                        InboundFeedback[]
+  emailContacts                           EmailContact[]
+}
+
+model UserSettings {
+  userId                         String  @id @db.Char(36)
+  includeDefaultMusic            Boolean @default(true)
+  addOverlay                     Boolean @default(true)
+  includeCallToAction            Boolean @default(true)
+  projectEmailsEnabled           Boolean @default(true)
+  autoApproveScript              Boolean @default(true)
+  autoApproveAudio               Boolean @default(true)
+  watermarkEnabled               Boolean @default(true)
+  captionsEnabled                Boolean @default(true)
+  characterCreationSettings      Json?
+  defaultDurationSec             Int?
+  sidebarOpen                    Boolean @default(true)
+  defaultUseScript               Boolean @default(false)
+  characterContentTone           String? @db.VarChar(16)
+  targetLanguages                Json?
+  languageVoicePreferences       Json?
+  scriptCreationGuidanceEnabled  Boolean @default(false)
+  scriptCreationGuidance         String? @db.Text
+  scriptAvoidanceGuidanceEnabled Boolean @default(false)
+  scriptAvoidanceGuidance        String? @db.Text
+  audioStyleGuidanceEnabled      Boolean @default(false)
+  audioStyleGuidance             String? @db.Text
+  preferredCharacter             Json?
+  preferredVoiceId               String? @db.VarChar(128)
+  preferredTemplateId            String? @db.Char(36)
+  schedulerDefaultTimes          Json?
+  schedulerCadence               Json?
+  user                           User    @relation(fields: [userId], references: [id])
+}
+
+model Project {
+  id                       String                     @id @default(uuid()) @db.Char(36)
+  userId                   String                     @db.Char(36)
+  title                    String
+  prompt                   String?                    @db.Text
+  rawScript                String?                    @db.Text
+  // Denormalized fields to keep final artifacts easily accessible
+  finalScriptText          String?                    @db.LongText
+  finalVoiceoverId         String?                    @db.Char(36)
+  finalVoiceoverPath       String?
+  finalVoiceoverUrl        String?                    @db.VarChar(512)
+  finalVideoPath           String?
+  finalVideoUrl            String?                    @db.VarChar(512)
+  status                   String
+  deleted                  Boolean                    @default(false)
+  deletedAt                DateTime?
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+  languages                Json?
+  user                     User                       @relation(fields: [userId], references: [id])
+  scripts                  Script[]
+  statusLog                ProjectStatusHistory[]
+  audios                   AudioCandidate[]
+  artifacts                ProjectArtifact[]
+  images                   ImageAsset[]
+  templateImages           ProjectTemplateImage[]
+  videos                   VideoAsset[]
+  languageProgress         ProjectLanguageProgress[]
+  selection                ProjectCharacterSelection?
+  scriptRequests           ScriptRequest[]
+  audioRequests            AudioRequest[]
+  jobs                     Job[]
+  currentDaemonId          String?                    @db.VarChar(128)
+  currentDaemonLockedAt    DateTime?
+  currentDaemon            Daemon?                    @relation(fields: [currentDaemonId], references: [id])
+  voiceId                  String?                    @db.VarChar(128)
+  voiceProvider            String?                    @db.VarChar(32)
+  languageVoiceAssignments Json?
+  languageVoiceProviders   Json?
+  contentTone              String                     @default("neutral") @db.VarChar(16)
+  // Optional link to a project group (groups aggregate settings for projects)
+  groupId                  String?                    @db.Char(36)
+  group                    ProjectGroup?              @relation(fields: [groupId], references: [id])
+  // Optional link to a template used to create this project
+  templateId               String?                    @db.Char(36)
+  template                 Template?                  @relation(fields: [templateId], references: [id])
+  publishTasks             PublishTask[]
+  creationAttempts         ProjectCreationAttempt[]
+
+  @@index([groupId])
+  @@index([templateId])
+  @@index([currentDaemonId])
+}
+
+model UserAttribution {
+  id                      String   @id @default(uuid()) @db.Char(36)
+  userId                  String   @unique @db.Char(36)
+  firstUtmSource          String?  @db.VarChar(200)
+  lastUtmSource           String?  @db.VarChar(200)
+  firstReferrerOrigin     String?  @db.VarChar(255)
+  firstReferrerPath       String?  @db.VarChar(512)
+  lastReferrerOrigin      String?  @db.VarChar(255)
+  lastReferrerPath        String?  @db.VarChar(512)
+  firstLandingPath        String?  @db.VarChar(512)
+  lastLandingPath         String?  @db.VarChar(512)
+  firstSourceToolSlug     String?  @db.VarChar(191)
+  lastSourceToolSlug      String?  @db.VarChar(191)
+  firstIntent             String?  @db.VarChar(32)
+  lastIntent              String?  @db.VarChar(32)
+  firstProjectPrompt      String?  @db.LongText
+  firstProjectPromptMode  String?  @db.VarChar(16)
+  firstProjectExperience  String?  @db.VarChar(32)
+  firstMainPageMode       String?  @db.VarChar(32)
+  firstMainPageCategoryId String?  @db.VarChar(64)
+  firstCharacterSlug      String?  @db.VarChar(191)
+  firstTemplateId         String?  @db.Char(36)
+  firstProjectAttemptId   String?  @db.Char(36)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([firstUtmSource])
+  @@index([lastUtmSource])
+  @@index([firstSourceToolSlug])
+  @@index([firstCharacterSlug])
+}
+
+model ProjectCreationAttempt {
+  id                 String   @id @default(uuid()) @db.Char(36)
+  userId             String   @db.Char(36)
+  projectId          String?  @db.Char(36)
+  clientAttemptId    String   @db.VarChar(64)
+  result             String   @db.VarChar(32)
+  promptText         String?  @db.LongText
+  promptMode         String?  @db.VarChar(16)
+  projectExperience  String?  @db.VarChar(32)
+  durationSeconds    Int?
+  tokenCost          Int?
+  tokenBalance       Int?
+  mainPageMode       String?  @db.VarChar(32)
+  mainPageCategoryId String?  @db.VarChar(64)
+  characterSlug      String?  @db.VarChar(191)
+  templateId         String?  @db.Char(36)
+  utmSource          String?  @db.VarChar(200)
+  utmMedium          String?  @db.VarChar(200)
+  utmCampaign        String?  @db.VarChar(200)
+  utmContent         String?  @db.VarChar(200)
+  utmTerm            String?  @db.VarChar(200)
+  intent             String?  @db.VarChar(32)
+  sourceToolSlug     String?  @db.VarChar(191)
+  referrerOrigin     String?  @db.VarChar(255)
+  referrerPath       String?  @db.VarChar(512)
+  landingPath        String?  @db.VarChar(512)
+  query              Json?
+  languageCodes      Json?
+  languageVoices     Json?
+  settingsSnapshot   Json?
+  rawContext         Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project            Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, clientAttemptId])
+  @@index([userId, createdAt])
+  @@index([projectId])
+  @@index([result, createdAt])
+  @@index([utmSource])
+  @@index([sourceToolSlug])
+  @@index([characterSlug])
+}
+
+model ProjectStatusHistory {
+  id        String   @id @default(uuid()) @db.Char(36)
+  projectId String   @db.Char(36)
+  status    String
+  message   String?
+  extra     Json?
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, createdAt])
+}
+
+model Script {
+  id           String   @id @default(uuid()) @db.Char(36)
+  projectId    String   @db.Char(36)
+  languageCode String   @default("en")
+  text         String   @db.LongText
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  project      Project  @relation(fields: [projectId], references: [id])
+
+  @@unique([projectId, languageCode])
+}
+
+model ScriptRequest {
+  id        String   @id @default(uuid()) @db.Char(36)
+  projectId String   @db.Char(36)
+  text      String   @db.LongText
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, createdAt])
+}
+
+model AudioCandidate {
+  id           String   @id @default(uuid()) @db.Char(36)
+  projectId    String   @db.Char(36)
+  path         String
+  publicUrl    String?  @db.VarChar(512)
+  localPath    String?  @db.Text
+  languageCode String?  @db.VarChar(16)
+  isFinal      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  project      Project  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@index([projectId, languageCode])
+}
+
+model ProjectLanguageProgress {
+  projectId         String   @db.Char(36)
+  languageCode      String   @db.VarChar(16)
+  transcriptionDone Boolean  @default(false)
+  captionsDone      Boolean  @default(false)
+  videoPartsDone    Boolean  @default(false)
+  finalVideoDone    Boolean  @default(false)
+  disabled          Boolean  @default(false)
+  failedStep        String?  @db.VarChar(64)
+  failureReason     String?  @db.VarChar(512)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([projectId, languageCode])
+}
+
+model AudioRequest {
+  id        String   @id @default(uuid()) @db.Char(36)
+  projectId String   @db.Char(36)
+  text      String   @db.LongText
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, createdAt])
+}
+
+model ImageAsset {
+  id            String                @id @default(uuid()) @db.Char(36)
+  projectId     String                @db.Char(36)
+  path          String
+  publicUrl     String?               @db.VarChar(512)
+  createdAt     DateTime              @default(now())
+  project       Project               @relation(fields: [projectId], references: [id])
+  templateImage ProjectTemplateImage?
+
+  @@index([projectId])
+}
+
+model ProjectTemplateImage {
+  id           String     @id @default(uuid()) @db.Char(36)
+  projectId    String     @db.Char(36)
+  imageAssetId String     @unique @db.Char(36)
+  imageName    String     @db.VarChar(256)
+  model        String     @db.VarChar(128)
+  prompt       String     @db.LongText
+  sentence     String?    @db.Text
+  size         String?    @db.VarChar(64)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  project      Project    @relation(fields: [projectId], references: [id])
+  imageAsset   ImageAsset @relation(fields: [imageAssetId], references: [id])
+
+  @@unique([projectId, imageName])
+  @@index([projectId])
+}
+
+model ProjectArtifact {
+  id        String   @id @default(uuid()) @db.Char(36)
+  projectId String   @db.Char(36)
+  kind      String   @db.VarChar(32)
+  variant   String?  @db.VarChar(64)
+  path      String
+  publicUrl String?  @db.VarChar(512)
+  localPath String?  @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@index([projectId, kind])
+  @@index([projectId, variant])
+}
+
+model VideoAsset {
+  id           String   @id @default(uuid()) @db.Char(36)
+  projectId    String   @db.Char(36)
+  path         String
+  publicUrl    String?  @db.VarChar(512)
+  isFinal      Boolean  @default(false)
+  variant      String?  @db.VarChar(16)
+  languageCode String?  @db.VarChar(16)
+  createdAt    DateTime @default(now())
+  project      Project  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@index([projectId, languageCode])
+  @@index([projectId, variant])
+}
+
+model Job {
+  id        String   @id @default(uuid()) @db.Char(36)
+  userId    String   @db.Char(36)
+  projectId String   @db.Char(36)
+  type      String
+  status    String
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id])
+  daemonId  String?  @db.VarChar(128)
+  daemon    Daemon?  @relation(fields: [daemonId], references: [id])
+
+  @@index([projectId])
+  @@index([status, createdAt])
+  @@index([daemonId])
+}
+
+model Daemon {
+  id         String    @id @db.VarChar(128)
+  lastSeenAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  projects   Project[]
+  jobs       Job[]
+}
+
+model Character {
+  id                   String                       @id @default(uuid()) @db.Char(36)
+  title                String
+  description          String?                      @db.VarChar(300)
+  slug                 String?                      @unique @db.VarChar(191)
+  name                 String?                      @db.VarChar(191)
+  tagline              String?                      @db.VarChar(255)
+  bio                  String?                      @db.VarChar(300)
+  searchTextEn         String?                      @db.Text
+  searchTextRu         String?                      @db.Text
+  priority             Int                          @default(0)
+  previewVideoUrl      String?                      @db.VarChar(512)
+  previewVideoHasAudio Boolean                      @default(true)
+  isCatalogPublic      Boolean                      @default(false)
+  defaultVoiceId       String?                      @db.VarChar(128)
+  defaultVoiceProvider String?                      @db.VarChar(32)
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+  variations           CharacterVariation[]
+  categories           CharacterCategoryCharacter[]
+  favoritedBy          UserFavoriteCharacter[]
+
+  @@index([isCatalogPublic, priority, createdAt])
+}
+
+model CharacterVariation {
+  id             String                  @id @default(uuid()) @db.Char(36)
+  characterId    String                  @db.Char(36)
+  title          String
+  description    String?                 @db.VarChar(300)
+  prompt         String?
+  imagePath      String?                 @db.VarChar(512)
+  emptyImagePath String?                 @db.VarChar(512)
+  priority       Int                     @default(0)
+  character      Character               @relation(fields: [characterId], references: [id])
+  imageVariants  CharacterImageVariant[]
+
+  @@index([characterId])
+  @@index([characterId, priority])
+}
+
+model CharacterImageVariant {
+  id                   String             @id @default(uuid()) @db.Char(36)
+  characterVariationId String             @db.Char(36)
+  kind                 String             @db.VarChar(32)
+  height               Int
+  width                Int?
+  path                 String             @db.VarChar(512)
+  url                  String?            @db.VarChar(512)
+  status               String             @default("ready") @db.VarChar(16)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  variation            CharacterVariation @relation(fields: [characterVariationId], references: [id], onDelete: Cascade)
+
+  @@unique([characterVariationId, kind, height])
+  @@index([kind, height])
+}
+
+model UserFavoriteCharacter {
+  userId      String    @db.Char(36)
+  characterId String    @db.Char(36)
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@id([userId, characterId])
+  @@index([userId, createdAt])
+  @@index([characterId, createdAt])
+}
+
+model CharacterCategory {
+  id            String                       @id @default(uuid()) @db.Char(36)
+  slug          String                       @unique @db.VarChar(191)
+  titleEn       String                       @db.VarChar(191)
+  titleRu       String                       @db.VarChar(191)
+  subtitleEn    String?                      @db.VarChar(255)
+  subtitleRu    String?                      @db.VarChar(255)
+  descriptionEn String?                      @db.Text
+  descriptionRu String?                      @db.Text
+  searchTextEn  String?                      @db.Text
+  searchTextRu  String?                      @db.Text
+  priority      Int                          @default(0)
+  isActive      Boolean                      @default(true)
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
+  characters    CharacterCategoryCharacter[]
+
+  @@index([isActive, priority, createdAt])
+}
+
+model CharacterCategoryCharacter {
+  categoryId  String            @db.Char(36)
+  characterId String            @db.Char(36)
+  priority    Int               @default(0)
+  createdAt   DateTime          @default(now())
+  category    CharacterCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  character   Character         @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@id([categoryId, characterId])
+  @@index([characterId, priority])
+  @@index([categoryId, priority])
+}
+
+model ImagePrankCategory {
+  id            String           @id @default(uuid()) @db.Char(36)
+  slug          String           @unique @db.VarChar(191)
+  titleEn       String           @db.VarChar(191)
+  titleRu       String           @db.VarChar(191)
+  subtitleEn    String?          @db.VarChar(255)
+  subtitleRu    String?          @db.VarChar(255)
+  descriptionEn String?          @db.Text
+  descriptionRu String?          @db.Text
+  searchTextEn  String?          @db.Text
+  searchTextRu  String?          @db.Text
+  priority      Int              @default(0)
+  isActive      Boolean          @default(true)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  subcategories ImagePrankSubcategory[]
+  items         ImagePrankItem[]
+
+  @@index([isActive, priority, createdAt])
+}
+
+model ImagePrankSubcategory {
+  id            String             @id @default(uuid()) @db.Char(36)
+  categoryId    String             @db.Char(36)
+  slug          String             @db.VarChar(191)
+  titleEn       String             @db.VarChar(191)
+  titleRu       String             @db.VarChar(191)
+  subtitleEn    String?            @db.VarChar(255)
+  subtitleRu    String?            @db.VarChar(255)
+  descriptionEn String?            @db.Text
+  descriptionRu String?            @db.Text
+  searchTextEn  String?            @db.Text
+  searchTextRu  String?            @db.Text
+  priority      Int                @default(0)
+  isActive      Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  category      ImagePrankCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  items         ImagePrankItem[]
+
+  @@unique([categoryId, slug])
+  @@index([categoryId, isActive, priority, createdAt])
+}
+
+model ImagePrankItem {
+  id               String             @id @default(uuid()) @db.Char(36)
+  categoryId       String             @db.Char(36)
+  subcategoryId    String?            @db.Char(36)
+  slug             String             @unique @db.VarChar(191)
+  titleEn          String             @db.VarChar(191)
+  titleRu          String             @db.VarChar(191)
+  descriptionEn    String?            @db.VarChar(300)
+  descriptionRu    String?            @db.VarChar(300)
+  searchTextEn     String?            @db.Text
+  searchTextRu     String?            @db.Text
+  imagePath        String             @db.VarChar(512)
+  imageUrl         String?            @db.VarChar(512)
+  previewImagePath String?            @db.VarChar(512)
+  previewImageUrl  String?            @db.VarChar(512)
+  priority         Int                @default(0)
+  isPublic         Boolean            @default(false)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  category         ImagePrankCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  subcategory      ImagePrankSubcategory? @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
+
+  @@index([categoryId, priority])
+  @@index([subcategoryId, priority])
+  @@index([isPublic, priority, createdAt])
+}
+
+model UserCharacter {
+  id          String                   @id @default(uuid()) @db.Char(36)
+  userId      String                   @db.Char(36)
+  title       String
+  description String?
+  user        User                     @relation(fields: [userId], references: [id])
+  variations  UserCharacterVariation[]
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  deleted     Boolean                  @default(false)
+  deletedAt   DateTime?
+
+  @@index([userId])
+}
+
+model UserCharacterVariation {
+  id              String                   @id @default(uuid()) @db.Char(36)
+  userCharacterId String                   @db.Char(36)
+  title           String
+  description     String?
+  prompt          String?
+  imagePath       String?                  @db.VarChar(512)
+  imageUrl        String?                  @db.VarChar(512)
+  status          String                   @default("ready")
+  source          String?                  @db.VarChar(32)
+  imageTasks      UserCharacterImageTask[]
+  userCharacter   UserCharacter            @relation(fields: [userCharacterId], references: [id])
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  deleted         Boolean                  @default(false)
+  deletedAt       DateTime?
+
+  @@index([userCharacterId])
+}
+
+model TokenTransaction {
+  id           String   @id @default(uuid()) @db.Char(36)
+  userId       String   @db.Char(36)
+  delta        Int
+  balanceAfter Int
+  type         String
+  description  String?
+  initiator    String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+model SubscriptionPurchase {
+  id                    String    @id @default(uuid()) @db.Char(36)
+  userId                String    @db.Char(36)
+  productId             String    @db.VarChar(128)
+  originalTransactionId String    @db.VarChar(128)
+  transactionId         String    @unique @db.VarChar(128)
+  environment           String    @db.VarChar(32)
+  purchaseDate          DateTime
+  expiresDate           DateTime?
+  payload               Json?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, productId])
+  @@index([originalTransactionId])
+}
+
+model TokenTopUpPurchase {
+  id                      String   @id @default(uuid()) @db.Char(36)
+  userId                  String   @db.Char(36)
+  stripeCheckoutSessionId String   @unique @db.VarChar(128)
+  stripePaymentIntentId   String?  @unique @db.VarChar(128)
+  stripePriceId           String   @db.VarChar(128)
+  packageKey              String   @db.VarChar(32)
+  tokens                  Int
+  amountTotal             Int
+  currency                String   @db.VarChar(8)
+  livemode                Boolean
+  payload                 Json?
+  createdAt               DateTime @default(now())
+  user                    User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+model ProjectCharacterSelection {
+  id                       String  @id @default(uuid()) @db.Char(36)
+  projectId                String  @unique @db.Char(36)
+  characterId              String? @db.Char(36)
+  characterVariationId     String? @db.Char(36)
+  userCharacterId          String? @db.Char(36)
+  userCharacterVariationId String? @db.Char(36)
+  project                  Project @relation(fields: [projectId], references: [id])
+}
+
+model PublishChannel {
+  id             String                   @id @default(uuid()) @db.Char(36)
+  userId         String                   @db.Char(36)
+  provider       String                   @db.VarChar(32)
+  channelId      String                   @db.VarChar(128)
+  displayName    String?                  @db.VarChar(255)
+  handle         String?                  @db.VarChar(255)
+  refreshToken   String?                  @db.Text
+  accessToken    String?                  @db.Text
+  tokenExpiresAt DateTime?
+  scopes         String?                  @db.VarChar(512)
+  metadata       Json?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  disconnectedAt DateTime?
+  user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignments    PublishChannelLanguage[]
+  tasks          PublishTask[]
+
+  @@unique([userId, provider, channelId])
+  @@index([userId])
+}
+
+model PublishChannelLanguage {
+  id           String         @id @default(uuid()) @db.Char(36)
+  userId       String         @db.Char(36)
+  channelId    String         @db.Char(36)
+  languageCode String         @db.VarChar(16)
+  createdAt    DateTime       @default(now())
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel      PublishChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, languageCode])
+  @@index([userId, languageCode])
+}
+
+model PublishChannelOAuthState {
+  id           String   @id @default(uuid()) @db.Char(36)
+  userId       String   @db.Char(36)
+  state        String   @unique @db.VarChar(128)
+  provider     String   @db.VarChar(32)
+  codeVerifier String   @db.VarChar(256)
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+  user         User     @relation("UserPublishChannelOAuthStates", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model PublishTask {
+  id                 String         @id @default(uuid()) @db.Char(36)
+  userId             String         @db.Char(36)
+  projectId          String         @db.Char(36)
+  languageCode       String         @db.VarChar(16)
+  channelId          String         @db.Char(36)
+  platform           String         @db.VarChar(32)
+  providerTaskId     String?        @db.VarChar(255)
+  videoUrl           String         @db.VarChar(1024)
+  title              String?        @db.VarChar(255)
+  description        String?        @db.Text
+  publishAt          DateTime
+  status             String         @db.VarChar(32)
+  errorMessage       String?        @db.Text
+  payload            Json?
+  cleanupRequestedAt DateTime?
+  cleanupCompletedAt DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  completedAt        DateTime?
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project            Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  channel            PublishChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([status, publishAt])
+  @@index([channelId, publishAt])
+  @@index([userId, languageCode])
+}
+
+model PlannedEmail {
+  id             String    @id @default(uuid()) @db.Char(36)
+  userId         String    @db.Char(36)
+  email          String    @db.VarChar(320)
+  kind           String    @db.VarChar(64)
+  subject        String?   @db.VarChar(512)
+  text           String?   @db.LongText
+  metadata       Json?
+  targetLanguage String    @default("en") @db.VarChar(8)
+  scheduledAt    DateTime
+  status         String    @default("pending") @db.VarChar(32)
+  attempts       Int       @default(0)
+  sentAt         DateTime?
+  lastError      String?   @db.Text
+  lockId         String?   @db.Char(36)
+  lockedAt       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind])
+  @@index([status, scheduledAt])
+  @@index([lockId, lockedAt])
+}
+
+model EmailContact {
+  id                    String    @id @default(uuid()) @db.Char(36)
+  audience              String    @default("yumcut") @db.VarChar(64)
+  email                 String    @db.VarChar(320)
+  userId                String?   @db.Char(36)
+  name                  String?   @db.VarChar(191)
+  preferredLanguage     String?   @db.VarChar(8)
+  marketingSubscribed   Boolean   @default(false)
+  subscribedAt          DateTime?
+  unsubscribedAt        DateTime?
+  consentSource         String?   @db.VarChar(64)
+  preferenceToken       String    @unique @default(uuid()) @db.Char(36)
+  legacyPreferenceToken String?   @unique @db.Char(36)
+  suppressedAt          DateTime?
+  suppressionReason     String?   @db.VarChar(64)
+  suppressionDetails    String?   @db.VarChar(512)
+  metadata              Json?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([audience, email])
+  @@index([userId])
+  @@index([audience, marketingSubscribed, suppressedAt])
+}
+
+model EmailDeliveryEvent {
+  id              String   @id @default(uuid()) @db.Char(36)
+  provider        String   @db.VarChar(32)
+  providerEventId String   @unique @db.VarChar(191)
+  eventType       String   @db.VarChar(64)
+  recipient       String?  @db.VarChar(320)
+  messageId       String?  @db.VarChar(255)
+  details         String?  @db.VarChar(1024)
+  createdAt       DateTime @default(now())
+
+  @@index([provider, eventType, createdAt])
+  @@index([recipient, createdAt])
+}
+
+model UserCharacterImageTask {
+  id            String                 @id @default(uuid()) @db.Char(36)
+  userId        String                 @db.Char(36)
+  variationId   String                 @db.Char(36)
+  description   String?                @db.Text
+  status        String                 @default("queued")
+  resultPath    String?                @db.VarChar(512)
+  resultUrl     String?                @db.VarChar(512)
+  failureReason String?                @db.Text
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  variation     UserCharacterVariation @relation(fields: [variationId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+}
+
+model TelegramAccount {
+  id         String   @id @default(uuid()) @db.Char(36)
+  userId     String   @unique @db.Char(36)
+  telegramId String   @unique @db.VarChar(32)
+  chatId     String   @unique @db.VarChar(32)
+  username   String?  @db.VarChar(255)
+  firstName  String?  @db.VarChar(255)
+  lastName   String?  @db.VarChar(255)
+  linkedAt   DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TelegramLinkToken {
+  id        String   @id @default(uuid()) @db.Char(36)
+  userId    String   @db.Char(36)
+  tokenHash String   @unique @db.VarChar(128)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model AdminNotificationSetting {
+  id                 String   @id @default(uuid()) @db.Char(36)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  notifyNewUser      Boolean  @default(true)
+  notifyNewProject   Boolean  @default(true)
+  notifyProjectDone  Boolean  @default(true)
+  notifyProjectError Boolean  @default(true)
+}
+
+model AdminSetting {
+  id        String   @id @default(uuid()) @db.Char(36)
+  key       String   @unique @db.VarChar(128)
+  value     Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AdminApiKey {
+  id                String    @id @default(uuid()) @db.Char(36)
+  name              String    @db.VarChar(120)
+  tokenHash         String    @unique @db.Char(64)
+  tokenPrefix       String    @db.VarChar(16)
+  scopes            Json?
+  createdByUserId   String    @db.Char(36)
+  revokedByUserId   String?   @db.Char(36)
+  createdAt         DateTime  @default(now())
+  revokedAt         DateTime?
+  lastUsedAt        DateTime?
+  lastUsedIp        String?   @db.VarChar(64)
+  lastUsedUserAgent String?   @db.VarChar(512)
+  createdByUser     User      @relation("AdminApiKeysCreated", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  revokedByUser     User?     @relation("AdminApiKeysRevoked", fields: [revokedByUserId], references: [id], onDelete: SetNull)
+  operations         AdminApiOperation[]
+
+  @@index([createdByUserId, createdAt])
+  @@index([revokedAt])
+}
+
+model AdminApiOperation {
+  id             String      @id @default(uuid()) @db.Char(36)
+  keyId          String      @db.Char(36)
+  idempotencyKey String      @db.VarChar(191)
+  action         String      @db.VarChar(64)
+  bodyHash       String      @db.Char(64)
+  result         Json?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  key            AdminApiKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
+
+  @@unique([keyId, idempotencyKey])
+  @@index([action, createdAt])
+}
+
+model UserApiKey {
+  id                String             @id @default(uuid()) @db.Char(36)
+  userId            String             @db.Char(36)
+  name              String             @db.VarChar(120)
+  tokenHash         String             @unique @db.Char(64)
+  tokenPrefix       String             @db.VarChar(16)
+  scopes            Json?
+  createdAt         DateTime           @default(now())
+  revokedAt         DateTime?
+  lastUsedAt        DateTime?
+  lastUsedIp        String?            @db.VarChar(64)
+  lastUsedUserAgent String?            @db.VarChar(512)
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  operations        UserApiOperation[]
+
+  @@index([userId, createdAt])
+  @@index([revokedAt])
+}
+
+model UserApiOperation {
+  id             String     @id @default(uuid()) @db.Char(36)
+  keyId          String     @db.Char(36)
+  idempotencyKey String     @db.VarChar(191)
+  action         String     @db.VarChar(64)
+  bodyHash       String     @db.Char(64)
+  result         Json?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  key            UserApiKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
+
+  @@unique([keyId, idempotencyKey])
+  @@index([action, createdAt])
+}
+
+model InboundFeedback {
+  id                   String    @id @default(uuid()) @db.Char(36)
+  emailId              String    @unique @db.VarChar(191)
+  fromEmail            String?   @db.VarChar(320)
+  fromRaw              String?   @db.VarChar(512)
+  toRecipients         Json?
+  subject              String?   @db.VarChar(512)
+  latestReplyText      String?   @db.LongText
+  snippetSource        String    @default("none") @db.VarChar(16)
+  userId               String?   @db.Char(36)
+  replyBonus           Json?
+  inboundFetchError    String?   @db.Text
+  telegramForwardError String?   @db.Text
+  enriched             Boolean   @default(false)
+  forwardedToTelegram  Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  user                 User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([fromEmail])
+}
+
+model AppStoreServerNotification {
+  id               String   @id @default(uuid()) @db.Char(36)
+  notificationType String?  @db.VarChar(128)
+  subtype          String?  @db.VarChar(128)
+  environment      String?  @db.VarChar(64)
+  notificationUuid String?  @unique @db.Char(36)
+  signedPayload    String?  @db.LongText
+  payload          Json?
+  headers          Json?
+  createdAt        DateTime @default(now())
+
+  @@index([notificationType, subtype])
+  @@index([createdAt])
+}
+
+/// NextAuth models (Prisma Adapter)
+model Account {
+  id                String  @id @default(uuid()) @db.Char(36)
+  userId            String  @db.Char(36)
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.LongText
+  access_token      String? @db.LongText
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.LongText
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(uuid()) @db.Char(36)
+  sessionToken String   @unique
+  userId       String   @db.Char(36)
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MobileSession {
+  id               String    @id @default(uuid()) @db.Char(36)
+  userId           String    @db.Char(36)
+  refreshTokenHash String    @db.Char(64)
+  deviceId         String    @db.VarChar(191)
+  deviceName       String?   @db.VarChar(191)
+  platform         String?   @db.VarChar(64)
+  appVersion       String?   @db.VarChar(32)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  lastRefreshAt    DateTime?
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([refreshTokenHash])
+  @@index([deviceId, userId])
+}
+
+model GuestProfile {
+  id         String   @id @default(uuid()) @db.Char(36)
+  userId     String   @unique @db.Char(36)
+  deviceId   String   @unique @db.VarChar(191)
+  deviceName String?  @db.VarChar(191)
+  platform   String?  @db.VarChar(64)
+  appVersion String?  @db.VarChar(32)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+/// Template system (short-form video templates)
+model TemplateArtStyle {
+  id                String     @id @default(uuid()) @db.Char(36)
+  ownerId           String     @db.Char(36)
+  title             String     @db.VarChar(255)
+  description       String?    @db.VarChar(4096)
+  prompt            String     @db.LongText
+  referenceImageUrl String?    @db.VarChar(512)
+  isPublic          Boolean    @default(false)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  owner             User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  templates         Template[]
+
+  @@index([ownerId, createdAt])
+}
+
+model TemplateVoiceStyle {
+  id          String     @id @default(uuid()) @db.Char(36)
+  ownerId     String     @db.Char(36)
+  title       String     @db.VarChar(255)
+  description String?    @db.VarChar(4096)
+  prompt      String     @db.LongText
+  isPublic    Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  owner       User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  templates   Template[]
+
+  @@index([ownerId, createdAt])
+}
+
+model TemplateVoice {
+  id            String     @id @default(uuid()) @db.Char(36)
+  title         String     @db.VarChar(255)
+  description   String?    @db.VarChar(4096)
+  externalId    String?    @db.VarChar(128)
+  languages     String?    @db.VarChar(255)
+  speed         String?    @db.VarChar(32)
+  gender        String?    @db.VarChar(32)
+  voiceProvider String     @default("elevenlabs") @db.VarChar(32)
+  previewPath   String?    @db.VarChar(512)
+  weight        Int        @default(0)
+  isPublic      Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  templates     Template[]
+}
+
+model TemplateMusic {
+  id          String     @id @default(uuid()) @db.Char(36)
+  ownerId     String     @db.Char(36)
+  title       String     @db.VarChar(255)
+  url         String     @db.VarChar(512)
+  description String?    @db.VarChar(4096)
+  isPublic    Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  owner       User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  templates   Template[]
+
+  @@index([ownerId, createdAt])
+}
+
+model TemplateCaptionsStyle {
+  id          String     @id @default(uuid()) @db.Char(36)
+  title       String     @db.VarChar(255)
+  description String?    @db.VarChar(4096)
+  externalId  String?    @db.VarChar(128)
+  isPublic    Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  templates   Template[]
+}
+
+model TemplateOverlay {
+  id          String     @id @default(uuid()) @db.Char(36)
+  title       String     @db.VarChar(255)
+  url         String     @db.VarChar(512)
+  description String?    @db.VarChar(4096)
+  isPublic    Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  templates   Template[]
+}
+
+model Template {
+  id              String   @id @default(uuid()) @db.Char(36)
+  ownerId         String   @db.Char(36)
+  code            String   @unique @db.VarChar(255)
+  title           String   @db.VarChar(255)
+  description     String?  @db.VarChar(4096)
+  previewImageUrl String   @db.VarChar(512)
+  previewVideoUrl String   @db.VarChar(512)
+  textPrompt      String   @db.LongText
+  customData      Json?
+  captionsStyleId String?  @db.Char(36)
+  overlayId       String?  @db.Char(36)
+  isPublic        Boolean  @default(false)
+  weight          Int      @default(0)
+  artStyleId      String?  @db.Char(36)
+  voiceStyleId    String?  @db.Char(36)
+  voiceId         String?  @db.Char(36)
+  musicId         String?  @db.Char(36)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  owner         User                   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  artStyle      TemplateArtStyle?      @relation(fields: [artStyleId], references: [id])
+  voiceStyle    TemplateVoiceStyle?    @relation(fields: [voiceStyleId], references: [id])
+  voice         TemplateVoice?         @relation(fields: [voiceId], references: [id])
+  music         TemplateMusic?         @relation(fields: [musicId], references: [id])
+  captionsStyle TemplateCaptionsStyle? @relation(fields: [captionsStyleId], references: [id])
+  overlay       TemplateOverlay?       @relation(fields: [overlayId], references: [id])
+
+  // Back-relations
+  projects Project[]
+  groups   ProjectGroup[]
+
+  @@index([ownerId, createdAt])
+  @@index([isPublic, createdAt])
+}
+
+/// Project groups aggregate settings shared by a set of projects
+model ProjectGroup {
+  id          String    @id @default(uuid()) @db.Char(36)
+  userId      String    @db.Char(36)
+  title       String    @db.VarChar(255)
+  description String?   @db.VarChar(4096)
+  // Optional high-level prompt to influence member projects
+  prompt      String?   @db.LongText
+  // Optional default template for projects in this group
+  templateId  String?   @db.Char(36)
+  template    Template? @relation(fields: [templateId], references: [id])
+
+  // Settings mirrored from project creation payload (no main prompt here)
+  durationSeconds                Int?
+  useExactTextAsScript           Boolean?
+  includeDefaultMusic            Boolean?
+  addOverlay                     Boolean?
+  autoApproveScript              Boolean?
+  autoApproveAudio               Boolean?
+  watermarkEnabled               Boolean?
+  captionsEnabled                Boolean?
+  scriptCreationGuidanceEnabled  Boolean?
+  scriptCreationGuidance         String?  @db.Text
+  scriptAvoidanceGuidanceEnabled Boolean?
+  scriptAvoidanceGuidance        String?  @db.Text
+  audioStyleGuidanceEnabled      Boolean?
+  audioStyleGuidance             String?  @db.Text
+  voiceId                        String?  @db.VarChar(128)
+  targetLanguage                 String?  @db.VarChar(16)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user      User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projects  Project[]
+  selection ProjectGroupCharacterSelection?
+
+  @@index([userId, createdAt])
+}
+
+/// Group-level character selection snapshot (mirrors ProjectCharacterSelection)
+model ProjectGroupCharacterSelection {
+  id                       String  @id @default(uuid()) @db.Char(36)
+  groupId                  String  @unique @db.Char(36)
+  characterId              String? @db.Char(36)
+  characterVariationId     String? @db.Char(36)
+  userCharacterId          String? @db.Char(36)
+  userCharacterVariationId String? @db.Char(36)
+
+  group ProjectGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+}
