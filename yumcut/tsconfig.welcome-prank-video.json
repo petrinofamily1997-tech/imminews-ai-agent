@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "scripts/welcome-prank-video/**/*.ts",
+    "scripts/welcome-prank-video/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
