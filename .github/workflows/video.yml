@@ -1,0 +1,78 @@
+```yaml
+name: Video Bot
+
+on:
+  schedule:
+    - cron: '0 */5 * * *'
+  workflow_dispatch:
+
+jobs:
+  create-video:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Start YumCut
+        run: |
+          docker run -d \
+            --name yumcut \
+            -p 3000:3000 \
+            igorshadurin/yumcut:latest
+
+          echo "Waiting for YumCut to start..."
+
+          for i in {1..30}; do
+            if curl -s http://localhost:3000 > /dev/null; then
+              echo "✅ YumCut is running"
+              break
+            fi
+
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+
+          echo "=============================="
+          echo "YUMCUT CONTAINER STATUS"
+          echo "=============================="
+          docker ps -a
+
+          echo "=============================="
+          echo "YUMCUT LOGS"
+          echo "=============================="
+          docker logs yumcut
+
+      - name: Check YumCut API
+        run: |
+          echo "Checking YumCut..."
+
+          curl -I http://localhost:3000 || true
+
+      - name: Run video bot
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          YUMCUT_URL: "http://localhost:3000"
+          YUMCUT_API_KEY: "test"
+        run: python video_bot.py
+
+      - name: Show YumCut logs if job fails
+        if: failure()
+        run: |
+          echo "=============================="
+          echo "YUMCUT LOGS AFTER FAILURE"
+          echo "=============================="
+          docker logs yumcut || true
