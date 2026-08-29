@@ -26,25 +26,17 @@ jobs:
         with:
           node-version: '20'
           
-      - name: Install YumCut dependencies
+      - name: Run YumCut from Docker
         run: |
-          cd yumcut
-          npm install
-          npx prisma generate
-          npm run build
-      
-      - name: Install FFmpeg
-        run: sudo apt-get install -y ffmpeg
-
-      - name: Start YumCut server
-        run: |
-          cd yumcut
-          nohup npm start &
-          sleep 15
+          docker run -d --name yumcut -p 3000:3000 igorshadurin/yumcut:latest
+          sleep 30
         env:
           DATABASE_URL: "file:./dev.db"
           NEXTAUTH_SECRET: "12345"
           NEXTAUTH_URL: "http://localhost:3000"
+      
+      - name: Install FFmpeg
+        run: sudo apt-get install -y ffmpeg
 
       - name: Run video bot
         env:
