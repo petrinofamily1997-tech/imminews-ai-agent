@@ -11,58 +11,59 @@ permissions:
 jobs:
   create-video:
     runs-on: ubuntu-latest
-
     timeout-minutes: 30
 
     steps:
-      # --------------------------------------------------
-      # 1. Checkout
-      # --------------------------------------------------
+
+      # ==========================================
+      # Checkout
+      # ==========================================
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --------------------------------------------------
-      # 2. Python
-      # --------------------------------------------------
+
+      # ==========================================
+      # Python
+      # ==========================================
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
+          cache: pip
 
-      # --------------------------------------------------
-      # 3. Python dependencies
-      # --------------------------------------------------
+
+      # ==========================================
+      # Python dependencies
+      # ==========================================
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            pip install requests python-dotenv groq
-          fi
 
-      # --------------------------------------------------
-      # 4. FFmpeg
-      # --------------------------------------------------
+      # ==========================================
+      # FFmpeg
+      # ==========================================
+
       - name: Install FFmpeg
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-      # --------------------------------------------------
-      # 5. Start YumCut
-      #
-      # IMPORTANT:
-      # We DO NOT run npm install/build here.
-      # YumCut is already packaged as a Docker image.
-      # --------------------------------------------------
+
+      # ==========================================
+      # Start YumCut
+      # ==========================================
+
       - name: Start YumCut
         env:
           DATABASE_URL: "file:./dev.db"
           NEXTAUTH_SECRET: "github-actions-secret"
           NEXTAUTH_URL: "http://localhost:3000"
+
         run: |
           set -e
 
@@ -88,6 +89,7 @@ jobs:
           READY=0
 
           for i in $(seq 1 60); do
+
             if curl -fsS http://127.0.0.1:3000/ > /dev/null 2>&1; then
               READY=1
               echo "✅ YumCut is ready"
@@ -95,20 +97,23 @@ jobs:
             fi
 
             if ! docker ps --format '{{.Names}}' | grep -q '^yumcut$'; then
-              echo "❌ YumCut container stopped unexpectedly"
+              echo "❌ YumCut container stopped"
               break
             fi
 
-            echo "Waiting for YumCut... $i/60"
+            echo "Waiting... $i/60"
             sleep 2
+
           done
+
 
           echo ""
           echo "======================================"
-          echo "CONTAINER STATUS"
+          echo "DOCKER STATUS"
           echo "======================================"
 
           docker ps -a
+
 
           echo ""
           echo "======================================"
@@ -117,20 +122,23 @@ jobs:
 
           docker logs yumcut || true
 
+
           if [ "$READY" -ne 1 ]; then
             echo ""
-            echo "❌ YumCut did not become ready."
+            echo "❌ YumCut failed to start"
             exit 1
           fi
 
-      # --------------------------------------------------
-      # 6. Check YumCut HTTP
-      # --------------------------------------------------
+
+      # ==========================================
+      # Check YumCut
+      # ==========================================
+
       - name: Check YumCut
         run: |
           set -e
 
-          echo "Checking http://127.0.0.1:3000 ..."
+          echo "Checking YumCut..."
 
           HTTP_CODE=$(curl \
             -s \
@@ -141,21 +149,24 @@ jobs:
           echo "HTTP status: $HTTP_CODE"
 
           if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 500 ]; then
-            echo "❌ YumCut returned an invalid HTTP status"
+            echo "❌ YumCut returned HTTP $HTTP_CODE"
             cat /tmp/yumcut-response.txt || true
             exit 1
           fi
 
-          echo "✅ YumCut HTTP server is working"
+          echo "✅ YumCut is responding"
 
-      # --------------------------------------------------
-      # 7. Run financial video bot
-      # --------------------------------------------------
+
+      # ==========================================
+      # Run Video Bot
+      # ==========================================
+
       - name: Run video bot
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           YUMCUT_URL: "http://127.0.0.1:3000"
           YUMCUT_API_KEY: ${{ secrets.YUMCUT_API_KEY }}
+
         run: |
           set -e
 
@@ -165,10 +176,12 @@ jobs:
 
           python video_bot.py
 
-      # --------------------------------------------------
-      # 8. Show YumCut logs on failure
-      # --------------------------------------------------
-      - name: YumCut logs on failure
+
+      # ==========================================
+      # Debug YumCut if something failed
+      # ==========================================
+
+      - name: Show YumCut logs on failure
         if: failure()
         run: |
           echo "======================================"
@@ -179,9 +192,11 @@ jobs:
 
           docker logs yumcut 2>&1 || true
 
-      # --------------------------------------------------
-      # 9. Cleanup
-      # --------------------------------------------------
+
+      # ==========================================
+      # Cleanup
+      # ==========================================
+
       - name: Cleanup
         if: always()
         run: |
