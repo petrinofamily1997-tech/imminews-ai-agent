@@ -1,9 +1,9 @@
-name: Video Bot - Auto Create & Post
+name: Video Bot
 
 on:
   schedule:
-    - cron: '0 */5 * * *'  # Каждые 5 часов
-  workflow_dispatch:        # Ручной запуск
+    - cron: '0 */5 * * *'
+  workflow_dispatch:
 
 jobs:
   create-video:
@@ -13,49 +13,41 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ============================================
-      # УСТАНОВКА PYTHON И ПАКЕТОВ
-      # ============================================
-      
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
           
       - name: Install Python dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          # Дополнительная установка на всякий случай
-          pip install chatterbox-tts torch torchaudio
-      
-      # ============================================
-      # УСТАНОВКА NODE.JS И HYPERFRAMES
-      # ============================================
+        run: pip install -r requirements.txt
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
           
-      - name: Install HyperFrames
-        run: npm install -g hyperframes
-      
-      # ============================================
-      # УСТАНОВКА FFMPEG
-      # ============================================
+      - name: Install YumCut dependencies
+        run: |
+          cd yumcut
+          npm install
+          npm run build
       
       - name: Install FFmpeg
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+        run: sudo apt-get install -y ffmpeg
 
-      # ============================================
-      # ЗАПУСК БОТА
-      # ============================================
-      
+      - name: Start YumCut server
+        run: |
+          cd yumcut
+          nohup npm start &
+          sleep 15
+        env:
+          DATABASE_URL: "file:./dev.db"
+          NEXTAUTH_SECRET: "12345"
+          NEXTAUTH_URL: "http://localhost:3000"
+
       - name: Run video bot
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          YUMCUT_URL: "http://localhost:3000"
+          YUMCUT_API_KEY: "test"
         run: python video_bot.py
